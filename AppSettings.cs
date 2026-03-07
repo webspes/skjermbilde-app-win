@@ -26,7 +26,8 @@ public class AppSettings
     private static readonly JsonSerializerOptions JsonOpts = new()
     {
         WriteIndented = true,
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true
     };
 
     public static AppSettings Load()
