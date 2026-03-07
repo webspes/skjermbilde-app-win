@@ -14,7 +14,6 @@ public class SettingsForm : Form
     private CheckBox _startupCheck = null!;
     private CheckBox _saveLocalCheck = null!;
     private Label _statusLabel = null!;
-    private Label _versionLabel = null!;
 
     public SettingsForm(AppSettings settings)
     {
@@ -25,13 +24,15 @@ public class SettingsForm : Form
     private void InitializeComponents()
     {
         Text = "Skjermbilde.no – Innstillinger";
-        Size = new Size(500, 560);
+        ClientSize = new Size(480, 620);
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
+        MinimizeBox = false;
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(13, 13, 20);
         ForeColor = Color.FromArgb(240, 240, 255);
         Font = new Font("Segoe UI", 9.5f);
+        Padding = new Padding(0);
 
         try
         {
@@ -40,146 +41,202 @@ public class SettingsForm : Form
         }
         catch { }
 
-        var y = 20;
+        // Main panel with padding
+        var main = new Panel
+        {
+            Dock = DockStyle.Fill,
+            Padding = new Padding(28, 24, 28, 16),
+            AutoScroll = true,
+            BackColor = BackColor
+        };
+        Controls.Add(main);
+
+        // Content using a TableLayoutPanel for consistent spacing
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Top,
+            AutoSize = true,
+            ColumnCount = 1,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            BackColor = Color.Transparent
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        main.Controls.Add(layout);
+
+        int row = 0;
 
         // Header
-        AddLabel("Skjermbilde.no Innstillinger", 20, y, 14f, FontStyle.Bold);
-        y += 40;
+        var header = MakeLabel("Skjermbilde.no Innstillinger", 15f, FontStyle.Bold, Color.FromArgb(240, 240, 255));
+        header.Margin = new Padding(0, 0, 0, 16);
+        layout.Controls.Add(header, 0, row++);
 
-        // Server section
-        AddLabel("Server-URL", 20, y);
-        y += 22;
-        _serverUrlBox = AddTextBox(_settings.ServerUrl, 20, y);
-        y += 36;
+        // --- Server section ---
+        layout.Controls.Add(MakeSectionLabel("Servertilkobling"), 0, row++);
 
-        AddLabel("API-nøkkel", 20, y);
-        y += 22;
-        _apiKeyBox = AddTextBox(_settings.ApiKey, 20, y, true);
-        y += 32;
+        layout.Controls.Add(MakeFieldLabel("Server-URL"), 0, row++);
+        _serverUrlBox = MakeTextBox(_settings.ServerUrl);
+        layout.Controls.Add(_serverUrlBox, 0, row++);
 
-        var testBtn = new Button
+        layout.Controls.Add(MakeFieldLabel("API-nøkkel"), 0, row++);
+        _apiKeyBox = MakeTextBox(_settings.ApiKey, true);
+        layout.Controls.Add(_apiKeyBox, 0, row++);
+
+        // Test button + status
+        var testRow = new FlowLayoutPanel
         {
-            Text = "Test tilkobling",
-            Location = new Point(20, y),
-            Size = new Size(130, 30),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(152, 152, 184)
+            AutoSize = true,
+            FlowDirection = FlowDirection.LeftToRight,
+            Margin = new Padding(0, 6, 0, 12),
+            BackColor = Color.Transparent,
+            WrapContents = false
         };
-        testBtn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
+        var testBtn = MakeButton("Test tilkobling", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), 130);
         testBtn.Click += async (_, _) => await TestConnection();
-        Controls.Add(testBtn);
+        testRow.Controls.Add(testBtn);
 
         _statusLabel = new Label
         {
-            Location = new Point(160, y + 5),
-            Size = new Size(300, 20),
-            ForeColor = Color.FromArgb(152, 152, 184)
+            AutoSize = true,
+            Margin = new Padding(12, 7, 0, 0),
+            ForeColor = Color.FromArgb(152, 152, 184),
+            Font = new Font("Segoe UI", 9f)
         };
-        Controls.Add(_statusLabel);
-        y += 42;
+        testRow.Controls.Add(_statusLabel);
+        layout.Controls.Add(testRow, 0, row++);
 
-        // Preferences
-        AddLabel("Innstillinger", 20, y, 11f, FontStyle.Bold);
-        y += 28;
+        // --- Preferences section ---
+        layout.Controls.Add(MakeSectionLabel("Innstillinger"), 0, row++);
 
-        _autoUploadCheck = AddCheckBox("Last opp automatisk", _settings.AutoUpload, 20, y);
-        y += 28;
-        _startupCheck = AddCheckBox("Start med Windows", _settings.LaunchAtStartup, 20, y);
-        y += 28;
-        _saveLocalCheck = AddCheckBox("Lagre lokalt", _settings.SaveLocal, 20, y);
-        y += 32;
+        _autoUploadCheck = MakeCheckBox("Last opp automatisk", _settings.AutoUpload);
+        layout.Controls.Add(_autoUploadCheck, 0, row++);
 
-        AddLabel("Lagringsmappe", 20, y);
-        y += 22;
-        _localDirBox = AddTextBox(_settings.LocalDir, 20, y);
-        y += 36;
+        _startupCheck = MakeCheckBox("Start med Windows", _settings.LaunchAtStartup);
+        layout.Controls.Add(_startupCheck, 0, row++);
 
-        AddLabel($"Navneformat fra server: {_settings.NamingFormat}", 20, y);
-        y += 30;
+        _saveLocalCheck = MakeCheckBox("Lagre lokalt", _settings.SaveLocal);
+        layout.Controls.Add(_saveLocalCheck, 0, row++);
 
-        // Buttons
-        var saveBtn = new Button
+        var dirLabel = MakeFieldLabel("Lagringsmappe");
+        dirLabel.Margin = new Padding(0, 8, 0, 4);
+        layout.Controls.Add(dirLabel, 0, row++);
+        _localDirBox = MakeTextBox(_settings.LocalDir);
+        layout.Controls.Add(_localDirBox, 0, row++);
+
+        var fmtLabel = MakeLabel($"Navneformat fra server: {_settings.NamingFormat}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
+        fmtLabel.Margin = new Padding(0, 4, 0, 16);
+        layout.Controls.Add(fmtLabel, 0, row++);
+
+        // --- Buttons ---
+        var btnRow = new FlowLayoutPanel
         {
-            Text = "Lagre innstillinger",
-            Location = new Point(Width - 180, y + 10),
-            Size = new Size(140, 36),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(37, 99, 235),
-            ForeColor = Color.White
+            AutoSize = true,
+            FlowDirection = FlowDirection.RightToLeft,
+            Margin = new Padding(0, 8, 0, 8),
+            Anchor = AnchorStyles.Right,
+            BackColor = Color.Transparent,
+            WrapContents = false
         };
+
+        var saveBtn = MakeButton("Lagre innstillinger", Color.FromArgb(37, 99, 235), Color.White, 150);
         saveBtn.FlatAppearance.BorderSize = 0;
         saveBtn.Click += (_, _) => SaveAndClose();
-        Controls.Add(saveBtn);
+        btnRow.Controls.Add(saveBtn);
 
-        var cancelBtn = new Button
-        {
-            Text = "Avbryt",
-            Location = new Point(Width - 320, y + 10),
-            Size = new Size(120, 36),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(152, 152, 184)
-        };
-        cancelBtn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
+        var cancelBtn = MakeButton("Avbryt", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), 100);
+        cancelBtn.Margin = new Padding(0, 0, 10, 0);
         cancelBtn.Click += (_, _) => Close();
-        Controls.Add(cancelBtn);
+        btnRow.Controls.Add(cancelBtn);
+
+        layout.Controls.Add(btnRow, 0, row++);
 
         // Version
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
-        _versionLabel = new Label
-        {
-            Text = $"Skjermbilde.no v{version?.Major}.{version?.Minor}.{version?.Build}",
-            Location = new Point(20, y + 18),
-            Size = new Size(200, 20),
-            ForeColor = Color.FromArgb(90, 90, 122),
-            Font = new Font("Segoe UI", 8.5f)
-        };
-        Controls.Add(_versionLabel);
+        var verLabel = MakeLabel($"Skjermbilde.no v{version?.Major}.{version?.Minor}.{version?.Build}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
+        verLabel.Margin = new Padding(0, 4, 0, 0);
+        layout.Controls.Add(verLabel, 0, row++);
     }
 
-    private Label AddLabel(string text, int x, int y, float size = 9.5f, FontStyle style = FontStyle.Regular)
+    private static Label MakeLabel(string text, float size, FontStyle style, Color color)
     {
-        var lbl = new Label
+        return new Label
         {
             Text = text,
-            Location = new Point(x, y),
             AutoSize = true,
-            ForeColor = Color.FromArgb(152, 152, 184),
-            Font = new Font("Segoe UI", size, style)
+            ForeColor = color,
+            Font = new Font("Segoe UI", size, style),
+            Margin = new Padding(0, 0, 0, 2)
         };
-        Controls.Add(lbl);
-        return lbl;
     }
 
-    private TextBox AddTextBox(string value, int x, int y, bool password = false)
+    private static Label MakeSectionLabel(string text)
     {
-        var tb = new TextBox
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = Color.FromArgb(200, 200, 220),
+            Font = new Font("Segoe UI", 11f, FontStyle.Bold),
+            Margin = new Padding(0, 14, 0, 8)
+        };
+    }
+
+    private static Label MakeFieldLabel(string text)
+    {
+        return new Label
+        {
+            Text = text,
+            AutoSize = true,
+            ForeColor = Color.FromArgb(152, 152, 184),
+            Font = new Font("Segoe UI", 9f),
+            Margin = new Padding(0, 2, 0, 4)
+        };
+    }
+
+    private static TextBox MakeTextBox(string value, bool password = false)
+    {
+        return new TextBox
         {
             Text = value,
-            Location = new Point(x, y),
-            Size = new Size(Width - 60, 26),
+            Anchor = AnchorStyles.Left | AnchorStyles.Right,
+            Height = 28,
             BackColor = Color.FromArgb(22, 22, 34),
             ForeColor = Color.FromArgb(240, 240, 255),
             BorderStyle = BorderStyle.FixedSingle,
-            UseSystemPasswordChar = password
+            Font = new Font("Segoe UI", 10f),
+            UseSystemPasswordChar = password,
+            Margin = new Padding(0, 0, 0, 6)
         };
-        Controls.Add(tb);
-        return tb;
     }
 
-    private CheckBox AddCheckBox(string text, bool value, int x, int y)
+    private static CheckBox MakeCheckBox(string text, bool value)
     {
-        var cb = new CheckBox
+        return new CheckBox
         {
             Text = text,
             Checked = value,
-            Location = new Point(x, y),
             AutoSize = true,
-            ForeColor = Color.FromArgb(240, 240, 255)
+            ForeColor = Color.FromArgb(240, 240, 255),
+            Font = new Font("Segoe UI", 9.5f),
+            Margin = new Padding(0, 4, 0, 4)
         };
-        Controls.Add(cb);
-        return cb;
+    }
+
+    private static Button MakeButton(string text, Color bg, Color fg, int width)
+    {
+        var btn = new Button
+        {
+            Text = text,
+            Size = new Size(width, 36),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = bg,
+            ForeColor = fg,
+            Font = new Font("Segoe UI", 9.5f),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0)
+        };
+        btn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
+        return btn;
     }
 
     private async System.Threading.Tasks.Task TestConnection()
@@ -199,7 +256,6 @@ public class SettingsForm : Form
             _statusLabel.Text = $"✓ {me.Username} ({me.ScreenshotCount} bilder)";
             _statusLabel.ForeColor = Color.FromArgb(34, 211, 165);
 
-            // Update naming format from server
             if (!string.IsNullOrEmpty(me.NamingFormat))
                 _settings.NamingFormat = me.NamingFormat;
         }
@@ -220,7 +276,6 @@ public class SettingsForm : Form
         _settings.LocalDir = _localDirBox.Text.Trim();
         _settings.Save();
 
-        // Update Windows startup
         StartupManager.SetStartup(_settings.LaunchAtStartup);
 
         DialogResult = DialogResult.OK;
