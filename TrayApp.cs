@@ -17,6 +17,7 @@ public class TrayApp : ApplicationContext
     private Rectangle _lastAreaBounds;
     private bool _hasLastArea;
     private UpdateInfo? _updateAvailable;
+    private string? _pendingBalloonUrl;
 
     public TrayApp()
     {
@@ -52,6 +53,18 @@ public class TrayApp : ApplicationContext
         {
             if (e is MouseEventArgs me && me.Button == MouseButtons.Left)
                 CaptureArea();
+        };
+        _trayIcon.BalloonTipClicked += (_, _) =>
+        {
+            if (_pendingBalloonUrl != null)
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+                {
+                    FileName = _pendingBalloonUrl,
+                    UseShellExecute = true
+                });
+                _pendingBalloonUrl = null;
+            }
         };
 
         UpdateTrayMenu();
@@ -229,7 +242,8 @@ public class TrayApp : ApplicationContext
             if (shareUrl != null)
             {
                 Clipboard.SetText(shareUrl);
-                _trayIcon.ShowBalloonTip(2000, "Delt!", "Delingslenken er kopiert til utklippstavlen.", ToolTipIcon.Info);
+                _pendingBalloonUrl = shareUrl;
+                _trayIcon.ShowBalloonTip(2000, "Delt!", "Klikk for \u00e5 \u00e5pne. Lenken er kopiert til utklippstavlen.", ToolTipIcon.Info);
                 return;
             }
         }
@@ -247,7 +261,8 @@ public class TrayApp : ApplicationContext
         var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
         if (result.Success)
         {
-            _trayIcon.ShowBalloonTip(2000, "Lastet opp!", "Skjermbildet er lastet opp til serveren.", ToolTipIcon.Info);
+            _pendingBalloonUrl = _settings.ServerUrl + "/dashboard";
+            _trayIcon.ShowBalloonTip(2000, "Lastet opp!", "Klikk for \u00e5 \u00e5pne galleriet.", ToolTipIcon.Info);
         }
         else
         {
