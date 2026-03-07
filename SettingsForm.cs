@@ -7,6 +7,7 @@ namespace Skjermbilde;
 public class SettingsForm : Form
 {
     private readonly AppSettings _settings;
+    private readonly float _dpiScale;
     private TextBox _serverUrlBox = null!;
     private TextBox _apiKeyBox = null!;
     private TextBox _localDirBox = null!;
@@ -18,13 +19,19 @@ public class SettingsForm : Form
     public SettingsForm(AppSettings settings)
     {
         _settings = settings;
+
+        using var g = CreateGraphics();
+        _dpiScale = g.DpiX / 96f;
+
         InitializeComponents();
     }
+
+    private int S(int px) => (int)(px * _dpiScale);
 
     private void InitializeComponents()
     {
         Text = "Skjermbilde.no – Innstillinger";
-        ClientSize = new Size(480, 620);
+        ClientSize = new Size(S(480), S(620));
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -32,13 +39,16 @@ public class SettingsForm : Form
         BackColor = Color.FromArgb(13, 13, 20);
         ForeColor = Color.FromArgb(240, 240, 255);
         Font = new Font("Segoe UI", 9.5f);
-        AutoScaleMode = AutoScaleMode.Dpi;
         Padding = new Padding(0);
 
         try
         {
             using var stream = typeof(SettingsForm).Assembly.GetManifestResourceStream("Skjermbilde.assets.icon_32.png");
-            if (stream != null) Icon = Icon.FromHandle(new Bitmap(stream).GetHicon());
+            if (stream != null)
+            {
+                using var bmp = new Bitmap(stream);
+                Icon = Icon.FromHandle(bmp.GetHicon());
+            }
         }
         catch { }
 
@@ -46,7 +56,7 @@ public class SettingsForm : Form
         var main = new Panel
         {
             Dock = DockStyle.Fill,
-            Padding = new Padding(28, 24, 28, 16),
+            Padding = new Padding(S(28), S(24), S(28), S(16)),
             AutoScroll = true,
             BackColor = BackColor
         };
@@ -69,7 +79,7 @@ public class SettingsForm : Form
 
         // Header
         var header = MakeLabel("Skjermbilde.no Innstillinger", 15f, FontStyle.Bold, Color.FromArgb(240, 240, 255));
-        header.Margin = new Padding(0, 0, 0, 16);
+        header.Margin = new Padding(0, 0, 0, S(16));
         layout.Controls.Add(header, 0, row++);
 
         // --- Server section ---
@@ -88,18 +98,18 @@ public class SettingsForm : Form
         {
             AutoSize = true,
             FlowDirection = FlowDirection.LeftToRight,
-            Margin = new Padding(0, 6, 0, 12),
+            Margin = new Padding(0, S(6), 0, S(12)),
             BackColor = Color.Transparent,
             WrapContents = false
         };
-        var testBtn = MakeButton("Test tilkobling", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), 130);
+        var testBtn = MakeButton("Test tilkobling", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), S(140));
         testBtn.Click += async (_, _) => await TestConnection();
         testRow.Controls.Add(testBtn);
 
         _statusLabel = new Label
         {
             AutoSize = true,
-            Margin = new Padding(12, 7, 0, 0),
+            Margin = new Padding(S(12), S(7), 0, 0),
             ForeColor = Color.FromArgb(152, 152, 184),
             Font = new Font("Segoe UI", 9f)
         };
@@ -119,13 +129,13 @@ public class SettingsForm : Form
         layout.Controls.Add(_saveLocalCheck, 0, row++);
 
         var dirLabel = MakeFieldLabel("Lagringsmappe");
-        dirLabel.Margin = new Padding(0, 8, 0, 4);
+        dirLabel.Margin = new Padding(0, S(8), 0, S(4));
         layout.Controls.Add(dirLabel, 0, row++);
         _localDirBox = MakeTextBox(_settings.LocalDir);
         layout.Controls.Add(_localDirBox, 0, row++);
 
         var fmtLabel = MakeLabel($"Navneformat fra server: {_settings.NamingFormat}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
-        fmtLabel.Margin = new Padding(0, 4, 0, 16);
+        fmtLabel.Margin = new Padding(0, S(4), 0, S(16));
         layout.Controls.Add(fmtLabel, 0, row++);
 
         // --- Buttons ---
@@ -133,19 +143,19 @@ public class SettingsForm : Form
         {
             AutoSize = true,
             FlowDirection = FlowDirection.RightToLeft,
-            Margin = new Padding(0, 8, 0, 8),
+            Margin = new Padding(0, S(8), 0, S(8)),
             Anchor = AnchorStyles.Right,
             BackColor = Color.Transparent,
             WrapContents = false
         };
 
-        var saveBtn = MakeButton("Lagre innstillinger", Color.FromArgb(37, 99, 235), Color.White, 150);
+        var saveBtn = MakeButton("Lagre innstillinger", Color.FromArgb(37, 99, 235), Color.White, S(160));
         saveBtn.FlatAppearance.BorderSize = 0;
         saveBtn.Click += (_, _) => SaveAndClose();
         btnRow.Controls.Add(saveBtn);
 
-        var cancelBtn = MakeButton("Avbryt", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), 100);
-        cancelBtn.Margin = new Padding(0, 0, 10, 0);
+        var cancelBtn = MakeButton("Avbryt", Color.FromArgb(30, 30, 45), Color.FromArgb(152, 152, 184), S(100));
+        cancelBtn.Margin = new Padding(0, 0, S(10), 0);
         cancelBtn.Click += (_, _) => Close();
         btnRow.Controls.Add(cancelBtn);
 
@@ -154,7 +164,7 @@ public class SettingsForm : Form
         // Version
         var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
         var verLabel = MakeLabel($"Skjermbilde.no v{version?.Major}.{version?.Minor}.{version?.Build}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
-        verLabel.Margin = new Padding(0, 4, 0, 0);
+        verLabel.Margin = new Padding(0, S(4), 0, 0);
         layout.Controls.Add(verLabel, 0, row++);
     }
 
@@ -194,23 +204,23 @@ public class SettingsForm : Form
         };
     }
 
-    private static TextBox MakeTextBox(string value, bool password = false)
+    private TextBox MakeTextBox(string value, bool password = false)
     {
         return new TextBox
         {
             Text = value,
             Anchor = AnchorStyles.Left | AnchorStyles.Right,
-            Height = 28,
+            Height = S(28),
             BackColor = Color.FromArgb(22, 22, 34),
             ForeColor = Color.FromArgb(240, 240, 255),
             BorderStyle = BorderStyle.FixedSingle,
             Font = new Font("Segoe UI", 10f),
             UseSystemPasswordChar = password,
-            Margin = new Padding(0, 0, 0, 6)
+            Margin = new Padding(0, 0, 0, S(6))
         };
     }
 
-    private static CheckBox MakeCheckBox(string text, bool value)
+    private CheckBox MakeCheckBox(string text, bool value)
     {
         return new CheckBox
         {
@@ -219,16 +229,16 @@ public class SettingsForm : Form
             AutoSize = true,
             ForeColor = Color.FromArgb(240, 240, 255),
             Font = new Font("Segoe UI", 9.5f),
-            Margin = new Padding(0, 4, 0, 4)
+            Margin = new Padding(0, S(4), 0, S(4))
         };
     }
 
-    private static Button MakeButton(string text, Color bg, Color fg, int width)
+    private Button MakeButton(string text, Color bg, Color fg, int width)
     {
         var btn = new Button
         {
             Text = text,
-            Size = new Size(width, 36),
+            Size = new Size(width, S(36)),
             FlatStyle = FlatStyle.Flat,
             BackColor = bg,
             ForeColor = fg,

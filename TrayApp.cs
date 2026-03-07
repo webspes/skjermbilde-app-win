@@ -29,7 +29,7 @@ public class TrayApp : ApplicationContext
             using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream("Skjermbilde.assets.icon_16.png");
             if (stream != null)
             {
-                var bmp = new Bitmap(stream);
+                using var bmp = new Bitmap(stream);
                 trayIcon = Icon.FromHandle(bmp.GetHicon());
             }
             else

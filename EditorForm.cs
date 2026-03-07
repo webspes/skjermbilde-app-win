@@ -85,7 +85,7 @@ public class EditorForm : Form
         try
         {
             using var stream = typeof(EditorForm).Assembly.GetManifestResourceStream("Skjermbilde.assets.icon_32.png");
-            if (stream != null) Icon = Icon.FromHandle(new Bitmap(stream).GetHicon());
+            if (stream != null) { using var bmp = new Bitmap(stream); Icon = Icon.FromHandle(bmp.GetHicon()); }
         }
         catch { }
 
@@ -178,10 +178,12 @@ public class EditorForm : Form
 
         var side = new FlowLayoutPanel
         {
-            Dock = DockStyle.Fill,
+            AutoSize = true,
+            AutoSizeMode = AutoSizeMode.GrowOnly,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            BackColor = Color.Transparent
+            BackColor = Color.Transparent,
+            Padding = new Padding(S(14), S(12), S(14), S(12))
         };
 
         // -- Colors --
@@ -372,7 +374,8 @@ public class EditorForm : Form
 
     private Button MakeBtn(string text)
     {
-        var w = Math.Max(S(40), TextRenderer.MeasureText(text, new Font("Segoe UI", 9f)).Width + S(14));
+        using var measureFont = new Font("Segoe UI", 9f);
+        var w = Math.Max(S(48), TextRenderer.MeasureText(text, measureFont).Width + S(16));
         return new Button
         {
             Text = text,
@@ -585,27 +588,19 @@ public class EditorForm : Form
         _cropping = true;
         _cropRect = rect;
 
-        _cropBar = new Panel
+        var cropLabel = new Label
         {
-            Size = new Size(S(340), S(42)),
-            BackColor = Color.FromArgb(235, 26, 26, 40)
-        };
-        _cropBar.Location = new Point((_pictureBox.Width - _cropBar.Width) / 2, S(10));
-
-        _cropBar.Controls.Add(new Label
-        {
-            Text = $"Beskjaer {rect.Width} x {rect.Height}?",
+            Text = $"Beskj\u00e6r {rect.Width} x {rect.Height}?",
             AutoSize = true,
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 9.5f),
             Location = new Point(S(10), S(10))
-        });
+        };
 
         var applyBtn = new Button
         {
             Text = "Bruk (Enter)",
-            Size = new Size(S(95), S(30)),
-            Location = new Point(S(175), S(6)),
+            Size = new Size(S(100), S(30)),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(37, 99, 235),
             ForeColor = Color.White,
@@ -614,13 +609,11 @@ public class EditorForm : Form
         };
         applyBtn.FlatAppearance.BorderSize = 0;
         applyBtn.Click += (_, _) => ApplyCrop();
-        _cropBar.Controls.Add(applyBtn);
 
         var cancelBtn = new Button
         {
             Text = "Avbryt (Esc)",
-            Size = new Size(S(95), S(30)),
-            Location = new Point(S(275), S(6)),
+            Size = new Size(S(100), S(30)),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(50, 30, 30),
             ForeColor = Color.FromArgb(240, 86, 86),
@@ -629,6 +622,23 @@ public class EditorForm : Form
         };
         cancelBtn.FlatAppearance.BorderColor = Color.FromArgb(240, 86, 86);
         cancelBtn.Click += (_, _) => CancelCrop();
+
+        // Calculate positions based on actual label width
+        using var tmpG = CreateGraphics();
+        var labelWidth = (int)tmpG.MeasureString(cropLabel.Text, cropLabel.Font).Width + S(20);
+        var barWidth = labelWidth + applyBtn.Width + S(8) + cancelBtn.Width + S(16);
+
+        applyBtn.Location = new Point(labelWidth, S(6));
+        cancelBtn.Location = new Point(labelWidth + applyBtn.Width + S(8), S(6));
+
+        _cropBar = new Panel
+        {
+            Size = new Size(barWidth, S(42)),
+            BackColor = Color.FromArgb(235, 26, 26, 40)
+        };
+        _cropBar.Location = new Point((_pictureBox.Width - _cropBar.Width) / 2, S(10));
+        _cropBar.Controls.Add(cropLabel);
+        _cropBar.Controls.Add(applyBtn);
         _cropBar.Controls.Add(cancelBtn);
 
         _pictureBox.Controls.Add(_cropBar);
@@ -962,23 +972,4 @@ public class DrawAction
     public string? TextContent { get; set; }
     public float TextSize { get; set; } = 20f;
     public int NumberValue { get; set; }
-}
-
-public class DarkToolStripRenderer : ToolStripProfessionalRenderer
-{
-    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
-    {
-        using var brush = new SolidBrush(Color.FromArgb(22, 22, 34));
-        e.Graphics.FillRectangle(brush, e.AffectedBounds);
-    }
-
-    protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
-    {
-        if (e.Item is ToolStripButton btn && btn.Checked)
-            using (var brush = new SolidBrush(Color.FromArgb(37, 99, 235)))
-                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
-        else if (e.Item.Selected)
-            using (var brush = new SolidBrush(Color.FromArgb(40, 40, 60)))
-                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
-    }
 }

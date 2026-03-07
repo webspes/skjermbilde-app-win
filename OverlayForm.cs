@@ -26,14 +26,12 @@ public class OverlayForm : Form
     private static readonly Color AccentBlue = Color.FromArgb(37, 99, 235);
     private static readonly Color AccentBlueHover = Color.FromArgb(59, 130, 246);
     private static readonly Color DangerRed = Color.FromArgb(220, 70, 70);
-    private static readonly Color DangerHover = Color.FromArgb(240, 90, 90);
     private static readonly Color BtnBg = Color.FromArgb(235, 20, 20, 28);
     private static readonly Color BtnBgHover = Color.FromArgb(245, 40, 40, 55);
     private static readonly Color BtnBorder = Color.FromArgb(60, 255, 255, 255);
     private static readonly Color ToolbarBg = Color.FromArgb(240, 18, 18, 26);
     private static readonly Color ToolbarBorder = Color.FromArgb(50, 255, 255, 255);
     private static readonly Color TextWhite = Color.FromArgb(240, 255, 255, 255);
-    private static readonly Color TextMuted = Color.FromArgb(160, 160, 190);
 
     private record struct ButtonDef(string Label, OverlayAction Action, ButtonStyle Style);
     private enum ButtonStyle { Default, Primary, Danger, Record }
@@ -139,7 +137,7 @@ public class OverlayForm : Form
 
     private void DrawHelpBar(Graphics g)
     {
-        var helpText = "Dra for a velge omrade  ·  ESC avbryt";
+        var helpText = "Dra for \u00e5 velge omr\u00e5de  \u00b7  ESC avbryt";
         using var helpFont = new Font("Segoe UI", Sf(13f));
         var helpSize = g.MeasureString(helpText, helpFont);
         var barWidth = helpSize.Width + S(60);
@@ -180,7 +178,14 @@ public class OverlayForm : Form
         using var toolbarBorderPen = new Pen(ToolbarBorder);
         g.DrawPath(toolbarBorderPen, toolbarPath);
 
-        using var btnFont = new Font("Segoe UI Semibold", Sf(11.5f), FontStyle.Regular);
+        using var btnFont = new Font("Segoe UI", Sf(11.5f), FontStyle.Bold);
+
+        // Draw separator between Cancel and action buttons
+        {
+            var sepX = buttonRects[0].Right + (buttonRects[1].X - buttonRects[0].Right) / 2;
+            using var sepPen = new Pen(Color.FromArgb(60, 255, 255, 255), Sf(1));
+            g.DrawLine(sepPen, sepX, toolbarRect.Y + Sf(10), sepX, toolbarRect.Bottom - Sf(10));
+        }
 
         // Buttons
         for (int i = 0; i < _buttons.Length; i++)
@@ -251,7 +256,7 @@ public class OverlayForm : Form
         if (!_hasSelection || _selecting || _selection.Width <= 10) return null;
 
         using var tmpG = CreateGraphics();
-        using var btnFont = new Font("Segoe UI Semibold", Sf(11.5f), FontStyle.Regular);
+        using var btnFont = new Font("Segoe UI", Sf(11.5f), FontStyle.Bold);
 
         var btnHeight = Sf(40);
         var btnPadX = Sf(28);
