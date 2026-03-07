@@ -85,11 +85,8 @@ public class TrayApp : ApplicationContext
     private void UpdateTrayMenu()
     {
         var menu = new ContextMenuStrip();
-        menu.BackColor = Color.FromArgb(22, 22, 34);
-        menu.ForeColor = Color.FromArgb(240, 240, 255);
-        menu.Renderer = new DarkMenuRenderer();
 
-        menu.Items.Add(new ToolStripLabel("Skjermbilde.no") { ForeColor = Color.FromArgb(90, 90, 122), Enabled = false });
+        menu.Items.Add(new ToolStripLabel("Skjermbilde.no") { ForeColor = Color.Gray, Enabled = false });
         menu.Items.Add(new ToolStripSeparator());
         menu.Items.Add("📷  Hele skjermen", null, (_, _) => CaptureFullscreen());
         menu.Items.Add("✂️  Velg område", null, (_, _) => CaptureArea());
@@ -431,22 +428,3 @@ public class HotkeyWindow : Form
     }
 }
 
-public class DarkMenuRenderer : ToolStripProfessionalRenderer
-{
-    protected override void OnRenderToolStripBackground(ToolStripRenderEventArgs e)
-    {
-        e.Graphics.FillRectangle(new SolidBrush(Color.FromArgb(22, 22, 34)), e.AffectedBounds);
-    }
-
-    protected override void OnRenderMenuItemBackground(ToolStripItemRenderEventArgs e)
-    {
-        if (e.Item.Selected && e.Item.Enabled)
-            e.Graphics.FillRectangle(new SolidBrush(Color.FromArgb(40, 40, 60)), e.Item.ContentRectangle);
-    }
-
-    protected override void OnRenderSeparator(ToolStripSeparatorRenderEventArgs e)
-    {
-        var rect = e.Item.ContentRectangle;
-        e.Graphics.DrawLine(new Pen(Color.FromArgb(50, 50, 70)), rect.Left, rect.Height / 2, rect.Right, rect.Height / 2);
-    }
-}
