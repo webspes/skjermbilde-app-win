@@ -174,6 +174,9 @@ public class TrayApp : ApplicationContext
                 case OverlayAction.QuickShare:
                     _ = QuickShare(cropped);
                     break;
+                case OverlayAction.Upload:
+                    _ = UploadOnly(cropped);
+                    break;
             }
         }
         background.Dispose();
@@ -220,6 +223,26 @@ public class TrayApp : ApplicationContext
             }
         }
         _trayIcon.ShowBalloonTip(2000, "Feil", result.Error ?? "Kunne ikke dele", ToolTipIcon.Error);
+    }
+
+    private async Task UploadOnly(Bitmap bmp)
+    {
+        var pngData = ScreenCapture.BitmapToPng(bmp);
+        var filename = _settings.GenerateLocalFilename();
+        bmp.Dispose();
+
+        if (_settings.SaveLocal) SaveLocalCopy(pngData, filename);
+
+        var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
+        if (result.Success)
+        {
+            _trayIcon.ShowBalloonTip(2000, "Lastet opp!", "Skjermbildet er lastet opp til serveren.", ToolTipIcon.Info);
+            OpenGallery();
+        }
+        else
+        {
+            _trayIcon.ShowBalloonTip(2000, "Feil", result.Error ?? "Kunne ikke laste opp", ToolTipIcon.Error);
+        }
     }
 
     private void SaveLocalCopy(byte[] pngData, string filename)

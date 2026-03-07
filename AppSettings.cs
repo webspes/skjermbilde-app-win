@@ -6,7 +6,7 @@ namespace Skjermbilde;
 
 public class AppSettings
 {
-    public string ServerUrl { get; set; } = "https://screenshot.git.testcloud.no";
+    public string ServerUrl { get; set; } = "https://skjermbilde.no";
     public string ApiKey { get; set; } = "";
     public string HotkeyFullscreen { get; set; } = "PrintScreen";
     public string HotkeyArea { get; set; } = "Ctrl+Shift+A";
