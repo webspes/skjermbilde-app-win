@@ -42,6 +42,7 @@ public class EditorForm : Form
         MinimumSize = new Size(600, 400);
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(13, 13, 20);
+        AutoScaleMode = AutoScaleMode.Dpi;
         KeyPreview = true;
 
         try

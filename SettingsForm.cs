@@ -32,6 +32,7 @@ public class SettingsForm : Form
         BackColor = Color.FromArgb(13, 13, 20);
         ForeColor = Color.FromArgb(240, 240, 255);
         Font = new Font("Segoe UI", 9.5f);
+        AutoScaleMode = AutoScaleMode.Dpi;
         Padding = new Padding(0);
 
         try
@@ -54,7 +55,7 @@ public class SettingsForm : Form
         // Content using a TableLayoutPanel for consistent spacing
         var layout = new TableLayoutPanel
         {
-            Dock = DockStyle.Top,
+            Dock = DockStyle.Fill,
             AutoSize = true,
             ColumnCount = 1,
             Padding = new Padding(0),
