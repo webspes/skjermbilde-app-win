@@ -297,7 +297,7 @@ public class OverlayForm : Form
         var toolbarX = selCenterX - totalWidth / 2;
         toolbarX = Math.Max(S(10), Math.Min(Width - totalWidth - S(10), toolbarX));
 
-        var toolbarY = _selection.Bottom + S(16);
+        float toolbarY = _selection.Bottom + S(16);
         // If not enough space below, put it above
         if (toolbarY + toolbarHeight > Height - S(10))
             toolbarY = _selection.Y - toolbarHeight - S(16);
