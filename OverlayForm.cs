@@ -8,7 +8,6 @@ namespace Skjermbilde;
 public class OverlayForm : Form
 {
     private readonly Bitmap _background;
-    private readonly float _dpiScale;
     private Point _startPoint;
     private Rectangle _selection;
     private bool _selecting;
@@ -17,10 +16,6 @@ public class OverlayForm : Form
 
     public Rectangle SelectedArea => _selection;
     public OverlayAction Action { get; private set; } = OverlayAction.Cancel;
-
-    // DPI-aware pixel helper
-    private int S(int px) => (int)(px * _dpiScale);
-    private float Sf(float px) => px * _dpiScale;
 
     // Colors
     private static readonly Color AccentBlue = Color.FromArgb(37, 99, 235);
@@ -48,10 +43,6 @@ public class OverlayForm : Form
     public OverlayForm(Bitmap background)
     {
         _background = background;
-
-        // Determine DPI scale
-        using var g = CreateGraphics();
-        _dpiScale = g.DpiX / 96f;
 
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
@@ -86,11 +77,11 @@ public class OverlayForm : Form
             g.ResetClip();
 
             // Selection border
-            using var pen = new Pen(AccentBlue, Sf(2));
+            using var pen = new Pen(AccentBlue, 2);
             g.DrawRectangle(pen, _selection);
 
             // Corner handles
-            var hs = S(10);
+            int hs = 8;
             DrawCornerHandle(g, _selection.X - hs / 2, _selection.Y - hs / 2, hs);
             DrawCornerHandle(g, _selection.Right - hs / 2, _selection.Y - hs / 2, hs);
             DrawCornerHandle(g, _selection.X - hs / 2, _selection.Bottom - hs / 2, hs);
@@ -98,39 +89,35 @@ public class OverlayForm : Form
 
             // Size label above selection
             var sizeText = $"{_selection.Width} x {_selection.Height} px";
-            using var sizeFont = new Font("Segoe UI", Sf(11f), FontStyle.Regular);
+            using var sizeFont = new Font("Segoe UI", 9f, FontStyle.Regular);
             var textSize = g.MeasureString(sizeText, sizeFont);
-            var labelX = _selection.X;
-            var labelY = _selection.Y - textSize.Height - S(14);
-            if (labelY < 4) labelY = _selection.Bottom + S(8);
+            var labelX = (float)_selection.X;
+            var labelY = _selection.Y - textSize.Height - 10f;
+            if (labelY < 4) labelY = _selection.Bottom + 6f;
 
-            var labelRect = new RectangleF(labelX, labelY, textSize.Width + S(20), textSize.Height + S(8));
-            using var labelPath = RoundedRect(labelRect, S(6));
+            var labelRect = new RectangleF(labelX, labelY, textSize.Width + 16, textSize.Height + 6);
+            using var labelPath = RoundedRect(labelRect, 5);
             using var labelBg = new SolidBrush(Color.FromArgb(220, 13, 13, 20));
             g.FillPath(labelBg, labelPath);
-            using var labelBorder = new Pen(ToolbarBorder);
-            g.DrawPath(labelBorder, labelPath);
+            using var labelBorderPen = new Pen(ToolbarBorder);
+            g.DrawPath(labelBorderPen, labelPath);
             using var textBrush = new SolidBrush(TextWhite);
-            g.DrawString(sizeText, sizeFont, textBrush, labelRect.X + S(10), labelRect.Y + S(4));
+            g.DrawString(sizeText, sizeFont, textBrush, labelRect.X + 8, labelRect.Y + 3);
         }
 
         // Help text when no selection
         if (!_selecting && !_hasSelection)
-        {
             DrawHelpBar(g);
-        }
 
         // Action toolbar when selection is done
         if (_hasSelection && !_selecting && _selection.Width > 10 && _selection.Height > 10)
-        {
             DrawActionToolbar(g);
-        }
     }
 
     private void DrawCornerHandle(Graphics g, int x, int y, int size)
     {
         using var brush = new SolidBrush(AccentBlue);
-        using var pen = new Pen(Color.White, Sf(1.5f));
+        using var pen = new Pen(Color.White, 1.5f);
         g.FillRectangle(brush, x, y, size, size);
         g.DrawRectangle(pen, x, y, size, size);
     }
@@ -138,23 +125,22 @@ public class OverlayForm : Form
     private void DrawHelpBar(Graphics g)
     {
         var helpText = "Dra for \u00e5 velge omr\u00e5de  \u00b7  ESC avbryt";
-        using var helpFont = new Font("Segoe UI", Sf(13f));
+        using var helpFont = new Font("Segoe UI", 10f);
         var helpSize = g.MeasureString(helpText, helpFont);
-        var barWidth = helpSize.Width + S(60);
-        var barHeight = helpSize.Height + S(20);
-        var barX = (Width - barWidth) / 2;
-        var barY = Height - barHeight - S(40);
+        float barWidth = helpSize.Width + 40;
+        float barHeight = helpSize.Height + 16;
+        float barX = (Width - barWidth) / 2;
+        float barY = Height - barHeight - 30;
 
         var barRect = new RectangleF(barX, barY, barWidth, barHeight);
-        using var barPath = RoundedRect(barRect, S(24));
+        using var barPath = RoundedRect(barRect, 20);
         using var barBg = new SolidBrush(ToolbarBg);
         g.FillPath(barBg, barPath);
         using var barBorder = new Pen(ToolbarBorder);
         g.DrawPath(barBorder, barPath);
 
         using var helpBrush = new SolidBrush(TextWhite);
-        g.DrawString(helpText, helpFont, helpBrush,
-            barX + S(30), barY + S(10));
+        g.DrawString(helpText, helpFont, helpBrush, barX + 20, barY + 8);
     }
 
     private void DrawActionToolbar(Graphics g)
@@ -166,25 +152,25 @@ public class OverlayForm : Form
 
         // Toolbar shadow
         var shadowRect = toolbarRect;
-        shadowRect.Offset(0, S(3));
-        using var shadowPath = RoundedRect(shadowRect, S(16));
-        using var shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0));
+        shadowRect.Offset(0, 2);
+        using var shadowPath = RoundedRect(shadowRect, 12);
+        using var shadowBrush = new SolidBrush(Color.FromArgb(50, 0, 0, 0));
         g.FillPath(shadowBrush, shadowPath);
 
         // Toolbar background
-        using var toolbarPath = RoundedRect(toolbarRect, S(16));
+        using var toolbarPath = RoundedRect(toolbarRect, 12);
         using var toolbarBgBrush = new SolidBrush(ToolbarBg);
         g.FillPath(toolbarBgBrush, toolbarPath);
         using var toolbarBorderPen = new Pen(ToolbarBorder);
         g.DrawPath(toolbarBorderPen, toolbarPath);
 
-        using var btnFont = new Font("Segoe UI", Sf(11.5f), FontStyle.Bold);
+        using var btnFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
 
         // Draw separator between Cancel and action buttons
         {
             var sepX = buttonRects[0].Right + (buttonRects[1].X - buttonRects[0].Right) / 2;
-            using var sepPen = new Pen(Color.FromArgb(60, 255, 255, 255), Sf(1));
-            g.DrawLine(sepPen, sepX, toolbarRect.Y + Sf(10), sepX, toolbarRect.Bottom - Sf(10));
+            using var sepPen = new Pen(Color.FromArgb(60, 255, 255, 255));
+            g.DrawLine(sepPen, sepX, toolbarRect.Y + 8, sepX, toolbarRect.Bottom - 8);
         }
 
         // Buttons
@@ -219,26 +205,25 @@ public class OverlayForm : Form
                     break;
             }
 
-            using var btnPath = RoundedRect(rect, S(10));
+            using var btnPath = RoundedRect(rect, 8);
             using var bgBrush = new SolidBrush(bg);
             g.FillPath(bgBrush, btnPath);
-            using var borderPen = new Pen(border, Sf(1.2f));
+            using var borderPen = new Pen(border, 1.2f);
             g.DrawPath(borderPen, btnPath);
 
             // Record button: draw red circle indicator
             if (btn.Style == ButtonStyle.Record)
             {
-                var circleSize = S(10);
-                var circleX = rect.X + S(14);
-                var circleY = rect.Y + (rect.Height - circleSize) / 2;
+                int circleSize = 8;
+                float circleX = rect.X + 12;
+                float circleY = rect.Y + (rect.Height - circleSize) / 2;
                 using var circleBrush = new SolidBrush(Color.FromArgb(255, 80, 80));
                 g.FillEllipse(circleBrush, circleX, circleY, circleSize, circleSize);
 
-                // Text offset to make room for circle
                 using var fgBrush2 = new SolidBrush(fg);
                 var ts2 = g.MeasureString(btn.Label, btnFont);
                 g.DrawString(btn.Label, btnFont, fgBrush2,
-                    circleX + circleSize + S(6),
+                    circleX + circleSize + 5,
                     rect.Y + (rect.Height - ts2.Height) / 2);
                 continue;
             }
@@ -256,65 +241,57 @@ public class OverlayForm : Form
         if (!_hasSelection || _selecting || _selection.Width <= 10) return null;
 
         using var tmpG = CreateGraphics();
-        using var btnFont = new Font("Segoe UI", Sf(11.5f), FontStyle.Bold);
+        using var btnFont = new Font("Segoe UI", 9.5f, FontStyle.Bold);
 
-        var btnHeight = Sf(40);
-        var btnPadX = Sf(28);
-        var btnGap = Sf(8);
-        var toolbarPadX = Sf(14);
-        var toolbarPadY = Sf(10);
+        float btnHeight = 30;
+        float btnPadX = 18;
+        float btnGap = 5;
+        float toolbarPadX = 10;
+        float toolbarPadY = 7;
 
         // Calculate button widths
         var buttonWidths = new float[_buttons.Length];
         for (int i = 0; i < _buttons.Length; i++)
         {
             var textWidth = tmpG.MeasureString(_buttons[i].Label, btnFont).Width;
-            var minWidth = Sf(90);
+            float minWidth = 70;
 
             if (_buttons[i].Style == ButtonStyle.Record)
-            {
-                // Extra space for the red circle indicator
-                buttonWidths[i] = Math.Max(textWidth + btnPadX + S(22), minWidth);
-            }
+                buttonWidths[i] = Math.Max(textWidth + btnPadX + 20, minWidth);
             else
-            {
                 buttonWidths[i] = Math.Max(textWidth + btnPadX, minWidth);
-            }
         }
 
-        var totalBtnWidth = 0f;
+        float totalBtnWidth = 0;
         for (int i = 0; i < buttonWidths.Length; i++)
             totalBtnWidth += buttonWidths[i] + (i > 0 ? btnGap : 0);
 
-        // Separator between cancel and the rest
-        var separatorWidth = Sf(16);
+        float separatorWidth = 14;
 
         var totalWidth = toolbarPadX + buttonWidths[0] + separatorWidth + (totalBtnWidth - buttonWidths[0]) + toolbarPadX;
         var toolbarHeight = btnHeight + toolbarPadY * 2;
 
         // Position toolbar below selection, centered on selection
-        var selCenterX = _selection.X + _selection.Width / 2f;
-        var toolbarX = selCenterX - totalWidth / 2;
-        toolbarX = Math.Max(S(10), Math.Min(Width - totalWidth - S(10), toolbarX));
+        float selCenterX = _selection.X + _selection.Width / 2f;
+        float toolbarX = selCenterX - totalWidth / 2;
+        toolbarX = Math.Max(8, Math.Min(Width - totalWidth - 8, toolbarX));
 
-        float toolbarY = _selection.Bottom + S(16);
-        // If not enough space below, put it above
-        if (toolbarY + toolbarHeight > Height - S(10))
-            toolbarY = _selection.Y - toolbarHeight - S(16);
-        // If still not enough space, put at bottom of screen
-        if (toolbarY < S(10))
-            toolbarY = Height - toolbarHeight - S(20);
+        float toolbarY = _selection.Bottom + 12;
+        if (toolbarY + toolbarHeight > Height - 8)
+            toolbarY = _selection.Y - toolbarHeight - 12;
+        if (toolbarY < 8)
+            toolbarY = Height - toolbarHeight - 16;
 
         var toolbarRect = new RectangleF(toolbarX, toolbarY, totalWidth, toolbarHeight);
 
         // Position buttons
         var buttonRects = new RectangleF[_buttons.Length];
-        var x = toolbarX + toolbarPadX;
-        var btnY = toolbarY + toolbarPadY;
+        float x = toolbarX + toolbarPadX;
+        float btnY = toolbarY + toolbarPadY;
 
         for (int i = 0; i < _buttons.Length; i++)
         {
-            if (i == 1) x += separatorWidth - btnGap; // separator gap after Cancel
+            if (i == 1) x += separatorWidth - btnGap;
             buttonRects[i] = new RectangleF(x, btnY, buttonWidths[i], btnHeight);
             x += buttonWidths[i] + btnGap;
         }
@@ -339,7 +316,6 @@ public class OverlayForm : Form
     {
         if (e.Button == MouseButtons.Left)
         {
-            // Check if clicking on action buttons
             if (_hasSelection && !_selecting)
             {
                 var idx = HitTestButtonIndex(e.Location);
@@ -360,7 +336,6 @@ public class OverlayForm : Form
                 }
             }
 
-            // Start new selection
             _selecting = true;
             _hasSelection = false;
             _startPoint = e.Location;

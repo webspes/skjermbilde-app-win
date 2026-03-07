@@ -248,7 +248,6 @@ public class TrayApp : ApplicationContext
         if (result.Success)
         {
             _trayIcon.ShowBalloonTip(2000, "Lastet opp!", "Skjermbildet er lastet opp til serveren.", ToolTipIcon.Info);
-            OpenGallery();
         }
         else
         {
