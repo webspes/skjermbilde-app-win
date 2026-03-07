@@ -103,10 +103,20 @@ public class TrayApp : ApplicationContext
 
         menu.Items.Add("⚙️  Innstillinger", null, (_, _) => ShowSettings());
 
+        menu.Items.Add(new ToolStripSeparator());
+
         if (_updateAvailable != null)
         {
-            menu.Items.Add(new ToolStripSeparator());
             menu.Items.Add($"⬆️  Oppdater til v{_updateAvailable.Version}", null, async (_, _) => await PerformUpdate());
+        }
+        else
+        {
+            menu.Items.Add("🔍  Sjekk for oppdateringer", null, async (_, _) =>
+            {
+                await CheckForUpdates();
+                if (_updateAvailable == null)
+                    _trayIcon.ShowBalloonTip(2000, "Oppdatert", "Du har siste versjon.", ToolTipIcon.Info);
+            });
         }
 
         menu.Items.Add(new ToolStripSeparator());
