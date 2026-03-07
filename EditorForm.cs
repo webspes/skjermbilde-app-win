@@ -1003,7 +1003,19 @@ public class EditorForm : Form
 
         Toast("Laster opp...");
         var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
-        Toast(result.Success ? "Lastet opp!" : (result.Error ?? "Feil"), !result.Success);
+        if (result.Success)
+        {
+            Toast("Lastet opp!");
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = _settings.ServerUrl + "/dashboard",
+                UseShellExecute = true
+            });
+        }
+        else
+        {
+            Toast(result.Error ?? "Feil ved opplasting", true);
+        }
     }
 
     private void SaveLocal(byte[] data, string filename)
