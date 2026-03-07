@@ -184,6 +184,10 @@ public class TrayApp : ApplicationContext
                 case OverlayAction.Upload:
                     _ = UploadOnly(cropped);
                     break;
+                case OverlayAction.Record:
+                    cropped.Dispose();
+                    StartRecording(area);
+                    break;
             }
         }
         background.Dispose();
@@ -250,6 +254,11 @@ public class TrayApp : ApplicationContext
         {
             _trayIcon.ShowBalloonTip(2000, "Feil", result.Error ?? "Kunne ikke laste opp", ToolTipIcon.Error);
         }
+    }
+
+    private void StartRecording(Rectangle area)
+    {
+        _trayIcon.ShowBalloonTip(3000, "Opptak", "Skjermopptak er ikke tilgjengelig enna. Kommer snart!", ToolTipIcon.Info);
     }
 
     private void SaveLocalCopy(byte[] pngData, string filename)

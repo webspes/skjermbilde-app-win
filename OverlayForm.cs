@@ -8,6 +8,7 @@ namespace Skjermbilde;
 public class OverlayForm : Form
 {
     private readonly Bitmap _background;
+    private readonly float _dpiScale;
     private Point _startPoint;
     private Rectangle _selection;
     private bool _selecting;
@@ -17,17 +18,25 @@ public class OverlayForm : Form
     public Rectangle SelectedArea => _selection;
     public OverlayAction Action { get; private set; } = OverlayAction.Cancel;
 
-    // Button layout constants
+    // DPI-aware pixel helper
+    private int S(int px) => (int)(px * _dpiScale);
+    private float Sf(float px) => px * _dpiScale;
+
+    // Colors
     private static readonly Color AccentBlue = Color.FromArgb(37, 99, 235);
     private static readonly Color AccentBlueHover = Color.FromArgb(59, 130, 246);
-    private static readonly Color DangerRed = Color.FromArgb(240, 86, 86);
-    private static readonly Color DangerBg = Color.FromArgb(200, 60, 30, 30);
-    private static readonly Color BtnBg = Color.FromArgb(230, 15, 15, 20);
-    private static readonly Color BtnBgHover = Color.FromArgb(240, 35, 35, 50);
-    private static readonly Color BtnBorder = Color.FromArgb(80, 255, 255, 255);
+    private static readonly Color DangerRed = Color.FromArgb(220, 70, 70);
+    private static readonly Color DangerHover = Color.FromArgb(240, 90, 90);
+    private static readonly Color BtnBg = Color.FromArgb(235, 20, 20, 28);
+    private static readonly Color BtnBgHover = Color.FromArgb(245, 40, 40, 55);
+    private static readonly Color BtnBorder = Color.FromArgb(60, 255, 255, 255);
+    private static readonly Color ToolbarBg = Color.FromArgb(240, 18, 18, 26);
+    private static readonly Color ToolbarBorder = Color.FromArgb(50, 255, 255, 255);
+    private static readonly Color TextWhite = Color.FromArgb(240, 255, 255, 255);
+    private static readonly Color TextMuted = Color.FromArgb(160, 160, 190);
 
     private record struct ButtonDef(string Label, OverlayAction Action, ButtonStyle Style);
-    private enum ButtonStyle { Default, Primary, Danger }
+    private enum ButtonStyle { Default, Primary, Danger, Record }
 
     private readonly ButtonDef[] _buttons = {
         new("Avbryt", OverlayAction.Cancel, ButtonStyle.Danger),
@@ -35,11 +44,16 @@ public class OverlayForm : Form
         new("Hurtigdeling", OverlayAction.QuickShare, ButtonStyle.Default),
         new("Rediger", OverlayAction.Edit, ButtonStyle.Default),
         new("Last opp", OverlayAction.Upload, ButtonStyle.Primary),
+        new("Opptak", OverlayAction.Record, ButtonStyle.Record),
     };
 
     public OverlayForm(Bitmap background)
     {
         _background = background;
+
+        // Determine DPI scale
+        using var g = CreateGraphics();
+        _dpiScale = g.DpiX / 96f;
 
         FormBorderStyle = FormBorderStyle.None;
         StartPosition = FormStartPosition.Manual;
@@ -63,7 +77,7 @@ public class OverlayForm : Form
         g.TextRenderingHint = System.Drawing.Text.TextRenderingHint.ClearTypeGridFit;
 
         // Dim the entire screen
-        using var dimBrush = new SolidBrush(Color.FromArgb(90, 0, 0, 0));
+        using var dimBrush = new SolidBrush(Color.FromArgb(80, 0, 0, 0));
         g.FillRectangle(dimBrush, ClientRectangle);
 
         if (_hasSelection && _selection.Width > 0 && _selection.Height > 0)
@@ -74,31 +88,32 @@ public class OverlayForm : Form
             g.ResetClip();
 
             // Selection border
-            using var pen = new Pen(AccentBlue, 2);
+            using var pen = new Pen(AccentBlue, Sf(2));
             g.DrawRectangle(pen, _selection);
 
-            // Corner handles (8x8 blue squares)
-            DrawCornerHandle(g, _selection.X - 3, _selection.Y - 3);
-            DrawCornerHandle(g, _selection.Right - 5, _selection.Y - 3);
-            DrawCornerHandle(g, _selection.X - 3, _selection.Bottom - 5);
-            DrawCornerHandle(g, _selection.Right - 5, _selection.Bottom - 5);
+            // Corner handles
+            var hs = S(10);
+            DrawCornerHandle(g, _selection.X - hs / 2, _selection.Y - hs / 2, hs);
+            DrawCornerHandle(g, _selection.Right - hs / 2, _selection.Y - hs / 2, hs);
+            DrawCornerHandle(g, _selection.X - hs / 2, _selection.Bottom - hs / 2, hs);
+            DrawCornerHandle(g, _selection.Right - hs / 2, _selection.Bottom - hs / 2, hs);
 
             // Size label above selection
             var sizeText = $"{_selection.Width} x {_selection.Height} px";
-            using var sizeFont = new Font("Segoe UI", 10f, FontStyle.Regular);
+            using var sizeFont = new Font("Segoe UI", Sf(11f), FontStyle.Regular);
             var textSize = g.MeasureString(sizeText, sizeFont);
             var labelX = _selection.X;
-            var labelY = _selection.Y - textSize.Height - 10;
-            if (labelY < 4) labelY = _selection.Bottom + 6;
+            var labelY = _selection.Y - textSize.Height - S(14);
+            if (labelY < 4) labelY = _selection.Bottom + S(8);
 
-            var labelRect = new RectangleF(labelX, labelY, textSize.Width + 16, textSize.Height + 6);
-            using var labelPath = RoundedRect(labelRect, 6);
-            using var labelBg = new SolidBrush(Color.FromArgb(210, 13, 13, 20));
+            var labelRect = new RectangleF(labelX, labelY, textSize.Width + S(20), textSize.Height + S(8));
+            using var labelPath = RoundedRect(labelRect, S(6));
+            using var labelBg = new SolidBrush(Color.FromArgb(220, 13, 13, 20));
             g.FillPath(labelBg, labelPath);
-            using var labelBorder = new Pen(Color.FromArgb(40, 255, 255, 255));
+            using var labelBorder = new Pen(ToolbarBorder);
             g.DrawPath(labelBorder, labelPath);
-            using var textBrush = new SolidBrush(Color.FromArgb(230, 255, 255, 255));
-            g.DrawString(sizeText, sizeFont, textBrush, labelRect.X + 8, labelRect.Y + 3);
+            using var textBrush = new SolidBrush(TextWhite);
+            g.DrawString(sizeText, sizeFont, textBrush, labelRect.X + S(10), labelRect.Y + S(4));
         }
 
         // Help text when no selection
@@ -114,32 +129,34 @@ public class OverlayForm : Form
         }
     }
 
-    private void DrawCornerHandle(Graphics g, int x, int y)
+    private void DrawCornerHandle(Graphics g, int x, int y, int size)
     {
         using var brush = new SolidBrush(AccentBlue);
-        g.FillRectangle(brush, x, y, 8, 8);
+        using var pen = new Pen(Color.White, Sf(1.5f));
+        g.FillRectangle(brush, x, y, size, size);
+        g.DrawRectangle(pen, x, y, size, size);
     }
 
     private void DrawHelpBar(Graphics g)
     {
-        var helpText = "Dra for a velge omrade  ·  ESC avbryt  ·  Klikk for fritt valg";
-        using var helpFont = new Font("Segoe UI", 11f);
+        var helpText = "Dra for a velge omrade  ·  ESC avbryt";
+        using var helpFont = new Font("Segoe UI", Sf(13f));
         var helpSize = g.MeasureString(helpText, helpFont);
-        var barWidth = helpSize.Width + 40;
-        var barHeight = helpSize.Height + 16;
+        var barWidth = helpSize.Width + S(60);
+        var barHeight = helpSize.Height + S(20);
         var barX = (Width - barWidth) / 2;
-        var barY = Height - barHeight - 30;
+        var barY = Height - barHeight - S(40);
 
         var barRect = new RectangleF(barX, barY, barWidth, barHeight);
-        using var barPath = RoundedRect(barRect, 20);
-        using var barBg = new SolidBrush(Color.FromArgb(200, 13, 13, 20));
+        using var barPath = RoundedRect(barRect, S(24));
+        using var barBg = new SolidBrush(ToolbarBg);
         g.FillPath(barBg, barPath);
-        using var barBorder = new Pen(Color.FromArgb(40, 255, 255, 255));
+        using var barBorder = new Pen(ToolbarBorder);
         g.DrawPath(barBorder, barPath);
 
-        using var helpBrush = new SolidBrush(Color.FromArgb(220, 255, 255, 255));
+        using var helpBrush = new SolidBrush(TextWhite);
         g.DrawString(helpText, helpFont, helpBrush,
-            barX + 20, barY + 8);
+            barX + S(30), barY + S(10));
     }
 
     private void DrawActionToolbar(Graphics g)
@@ -149,26 +166,21 @@ public class OverlayForm : Form
 
         var (toolbarRect, buttonRects) = rects.Value;
 
+        // Toolbar shadow
+        var shadowRect = toolbarRect;
+        shadowRect.Offset(0, S(3));
+        using var shadowPath = RoundedRect(shadowRect, S(16));
+        using var shadowBrush = new SolidBrush(Color.FromArgb(60, 0, 0, 0));
+        g.FillPath(shadowBrush, shadowPath);
+
         // Toolbar background
-        using var toolbarPath = RoundedRect(toolbarRect, 14);
-        using var toolbarBg = new SolidBrush(Color.FromArgb(235, 15, 15, 20));
-        g.FillPath(toolbarBg, toolbarPath);
-        using var toolbarBorder = new Pen(Color.FromArgb(40, 255, 255, 255));
-        g.DrawPath(toolbarBorder, toolbarPath);
+        using var toolbarPath = RoundedRect(toolbarRect, S(16));
+        using var toolbarBgBrush = new SolidBrush(ToolbarBg);
+        g.FillPath(toolbarBgBrush, toolbarPath);
+        using var toolbarBorderPen = new Pen(ToolbarBorder);
+        g.DrawPath(toolbarBorderPen, toolbarPath);
 
-        using var btnFont = new Font("Segoe UI", 10f, FontStyle.Regular);
-
-        // Size info on the left
-        var infoText = $"{_selection.Width} x {_selection.Height}";
-        using var infoFont = new Font("Consolas", 9.5f);
-        using var infoBrush = new SolidBrush(Color.FromArgb(152, 152, 184));
-        g.DrawString(infoText, infoFont, infoBrush, toolbarRect.X + 14, toolbarRect.Y + 12);
-
-        // Separator after size info
-        var infoSize = g.MeasureString(infoText, infoFont);
-        var sepX = toolbarRect.X + 14 + infoSize.Width + 10;
-        using var sepPen = new Pen(Color.FromArgb(50, 255, 255, 255));
-        g.DrawLine(sepPen, sepX, toolbarRect.Y + 8, sepX, toolbarRect.Bottom - 8);
+        using var btnFont = new Font("Segoe UI Semibold", Sf(11.5f), FontStyle.Regular);
 
         // Buttons
         for (int i = 0; i < _buttons.Length; i++)
@@ -177,34 +189,53 @@ public class OverlayForm : Form
             var rect = buttonRects[i];
             var hovered = i == _hoveredButton;
 
-            Color bg, fg;
+            Color bg, fg, border;
             switch (btn.Style)
             {
                 case ButtonStyle.Primary:
                     bg = hovered ? AccentBlueHover : AccentBlue;
                     fg = Color.White;
+                    border = hovered ? AccentBlueHover : AccentBlue;
                     break;
                 case ButtonStyle.Danger:
-                    bg = hovered ? Color.FromArgb(220, 80, 30, 30) : Color.FromArgb(200, 50, 20, 20);
+                    bg = hovered ? Color.FromArgb(250, 70, 25, 25) : Color.FromArgb(230, 45, 15, 15);
                     fg = DangerRed;
+                    border = Color.FromArgb(100, 220, 70, 70);
+                    break;
+                case ButtonStyle.Record:
+                    bg = hovered ? Color.FromArgb(250, 180, 30, 30) : Color.FromArgb(230, 160, 20, 20);
+                    fg = Color.White;
+                    border = Color.FromArgb(180, 200, 50, 50);
                     break;
                 default:
                     bg = hovered ? BtnBgHover : BtnBg;
-                    fg = Color.White;
+                    fg = TextWhite;
+                    border = BtnBorder;
                     break;
             }
 
-            using var btnPath = RoundedRect(rect, 8);
+            using var btnPath = RoundedRect(rect, S(10));
             using var bgBrush = new SolidBrush(bg);
             g.FillPath(bgBrush, btnPath);
-            using var borderPen = new Pen(BtnBorder);
+            using var borderPen = new Pen(border, Sf(1.2f));
             g.DrawPath(borderPen, btnPath);
 
-            // Draw separator before Cancel button (first button)
-            if (i == 1)
+            // Record button: draw red circle indicator
+            if (btn.Style == ButtonStyle.Record)
             {
-                var sx = rect.X - 6;
-                g.DrawLine(sepPen, sx, toolbarRect.Y + 8, sx, toolbarRect.Bottom - 8);
+                var circleSize = S(10);
+                var circleX = rect.X + S(14);
+                var circleY = rect.Y + (rect.Height - circleSize) / 2;
+                using var circleBrush = new SolidBrush(Color.FromArgb(255, 80, 80));
+                g.FillEllipse(circleBrush, circleX, circleY, circleSize, circleSize);
+
+                // Text offset to make room for circle
+                using var fgBrush2 = new SolidBrush(fg);
+                var ts2 = g.MeasureString(btn.Label, btnFont);
+                g.DrawString(btn.Label, btnFont, fgBrush2,
+                    circleX + circleSize + S(6),
+                    rect.Y + (rect.Height - ts2.Height) / 2);
+                continue;
             }
 
             using var fgBrush = new SolidBrush(fg);
@@ -220,50 +251,65 @@ public class OverlayForm : Form
         if (!_hasSelection || _selecting || _selection.Width <= 10) return null;
 
         using var tmpG = CreateGraphics();
-        using var btnFont = new Font("Segoe UI", 10f, FontStyle.Regular);
-        using var infoFont = new Font("Consolas", 9.5f);
+        using var btnFont = new Font("Segoe UI Semibold", Sf(11.5f), FontStyle.Regular);
 
-        var infoText = $"{_selection.Width} x {_selection.Height}";
-        var infoWidth = tmpG.MeasureString(infoText, infoFont).Width;
-
-        var btnHeight = 32f;
-        var btnPadding = 20f;
-        var btnGap = 8f;
+        var btnHeight = Sf(40);
+        var btnPadX = Sf(28);
+        var btnGap = Sf(8);
+        var toolbarPadX = Sf(14);
+        var toolbarPadY = Sf(10);
 
         // Calculate button widths
         var buttonWidths = new float[_buttons.Length];
         for (int i = 0; i < _buttons.Length; i++)
         {
             var textWidth = tmpG.MeasureString(_buttons[i].Label, btnFont).Width;
-            buttonWidths[i] = Math.Max(textWidth + btnPadding, 80);
+            var minWidth = Sf(90);
+
+            if (_buttons[i].Style == ButtonStyle.Record)
+            {
+                // Extra space for the red circle indicator
+                buttonWidths[i] = Math.Max(textWidth + btnPadX + S(22), minWidth);
+            }
+            else
+            {
+                buttonWidths[i] = Math.Max(textWidth + btnPadX, minWidth);
+            }
         }
 
         var totalBtnWidth = 0f;
         for (int i = 0; i < buttonWidths.Length; i++)
             totalBtnWidth += buttonWidths[i] + (i > 0 ? btnGap : 0);
 
-        // Info + separator + gap + cancel + separator + gap + rest of buttons
-        var totalWidth = 14 + infoWidth + 10 + 8 + totalBtnWidth + 14;
-        var toolbarHeight = btnHeight + 16;
+        // Separator between cancel and the rest
+        var separatorWidth = Sf(16);
 
-        var toolbarX = (Width - totalWidth) / 2;
-        var toolbarY = Height - toolbarHeight - 20;
+        var totalWidth = toolbarPadX + buttonWidths[0] + separatorWidth + (totalBtnWidth - buttonWidths[0]) + toolbarPadX;
+        var toolbarHeight = btnHeight + toolbarPadY * 2;
 
-        // Keep toolbar near selection if possible
+        // Position toolbar below selection, centered on selection
         var selCenterX = _selection.X + _selection.Width / 2f;
-        toolbarX = selCenterX - totalWidth / 2;
-        toolbarX = Math.Max(10, Math.Min(Width - totalWidth - 10, toolbarX));
+        var toolbarX = selCenterX - totalWidth / 2;
+        toolbarX = Math.Max(S(10), Math.Min(Width - totalWidth - S(10), toolbarX));
+
+        var toolbarY = _selection.Bottom + S(16);
+        // If not enough space below, put it above
+        if (toolbarY + toolbarHeight > Height - S(10))
+            toolbarY = _selection.Y - toolbarHeight - S(16);
+        // If still not enough space, put at bottom of screen
+        if (toolbarY < S(10))
+            toolbarY = Height - toolbarHeight - S(20);
 
         var toolbarRect = new RectangleF(toolbarX, toolbarY, totalWidth, toolbarHeight);
 
         // Position buttons
         var buttonRects = new RectangleF[_buttons.Length];
-        var x = toolbarX + 14 + infoWidth + 10 + 8; // after info + separator
-        var btnY = toolbarY + 8;
+        var x = toolbarX + toolbarPadX;
+        var btnY = toolbarY + toolbarPadY;
 
         for (int i = 0; i < _buttons.Length; i++)
         {
-            if (i == 1) x += 4; // extra gap after Cancel (separator space)
+            if (i == 1) x += separatorWidth - btnGap; // separator gap after Cancel
             buttonRects[i] = new RectangleF(x, btnY, buttonWidths[i], btnHeight);
             x += buttonWidths[i] + btnGap;
         }
@@ -401,5 +447,6 @@ public enum OverlayAction
     Edit,
     Copy,
     QuickShare,
-    Upload
+    Upload,
+    Record
 }

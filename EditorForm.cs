@@ -13,17 +13,20 @@ public class EditorForm : Form
     private Bitmap _original;
     private Bitmap _current;
     private readonly AppSettings _settings;
+    private readonly float _dpiScale;
 
-    // UI panels
-    private Panel _headerPanel = null!;
-    private Panel _toolbarPanel = null!;
-    private Panel _sidePanel = null!;
-    private Panel _statusPanel = null!;
+    // UI
     private PictureBox _pictureBox = null!;
+    private Label _statusLabel = null!;
+    private Panel _sidePanel = null!;
+    private Label _numberPreviewLabel = null!;
+    private FlowLayoutPanel _textSizePanel = null!;
+    private Panel _numberSection = null!;
+    private FlowLayoutPanel _colorGrid = null!;
 
     // Drawing state
     private Tool _tool = Tool.Number;
-    private Color _drawColor = Color.Red;
+    private Color _drawColor = Color.FromArgb(239, 68, 68);
     private float _penWidth = 4f;
     private Point _lastPoint;
     private bool _drawing;
@@ -31,61 +34,49 @@ public class EditorForm : Form
     private readonly List<DrawAction> _redoStack = new();
     private DrawAction? _currentAction;
     private int _numberCounter = 1;
+    private float _textSize = 20f;
 
     // Text input
     private TextBox? _activeTextBox;
 
-    // Crop state
+    // Crop
     private bool _cropping;
     private Rectangle _cropRect;
     private Panel? _cropBar;
 
-    // Zoom
-    private float _zoomLevel = 1f;
-
-    // UI references
-    private Label? _statusLabel;
-    private Label? _numberPreview;
-    private Panel? _numberSection;
-    private FlowLayoutPanel? _textSizeSection;
+    // Tool buttons for highlight
     private readonly List<Button> _toolButtons = new();
 
     // Color presets
-    private static readonly Color[] ColorPresets = {
-        Color.FromArgb(239, 68, 68),
-        Color.FromArgb(249, 115, 22),
-        Color.FromArgb(234, 179, 8),
-        Color.FromArgb(34, 197, 94),
-        Color.FromArgb(59, 130, 246),
-        Color.FromArgb(99, 102, 241),
-        Color.White,
-        Color.Black
+    private static readonly Color[] Presets = {
+        Color.FromArgb(239, 68, 68), Color.FromArgb(249, 115, 22),
+        Color.FromArgb(234, 179, 8), Color.FromArgb(34, 197, 94),
+        Color.FromArgb(59, 130, 246), Color.FromArgb(99, 102, 241),
+        Color.White, Color.Black
     };
-
-    // Text size presets
-    private static readonly (string Label, float Size)[] TextSizes = {
-        ("XS", 12f), ("S", 16f), ("M", 20f), ("L", 28f), ("XL", 36f)
-    };
-    private float _textSize = 20f;
-    private FlowLayoutPanel? _colorGrid;
 
     public EditorForm(Bitmap screenshot, AppSettings settings)
     {
         _original = new Bitmap(screenshot);
         _current = new Bitmap(screenshot);
         _settings = settings;
-        InitializeComponents();
+
+        using var g = CreateGraphics();
+        _dpiScale = g.DpiX / 96f;
+
+        BuildUI();
         UpdateCanvas();
-        UpdateToolSelection();
+        HighlightActiveTool();
     }
 
-    private void InitializeComponents()
+    private int S(int px) => (int)(px * _dpiScale);
+
+    private void BuildUI()
     {
         Text = "Skjermbilde.no - Redigering";
-        Size = new Size(
-            Math.Min(1280, Screen.PrimaryScreen!.WorkingArea.Width - 40),
-            Math.Min(900, Screen.PrimaryScreen!.WorkingArea.Height - 40));
-        MinimumSize = new Size(700, 500);
+        var wa = Screen.PrimaryScreen!.WorkingArea;
+        Size = new Size(Math.Min(S(1280), wa.Width - 40), Math.Min(S(900), wa.Height - 40));
+        MinimumSize = new Size(S(700), S(500));
         StartPosition = FormStartPosition.CenterScreen;
         BackColor = Color.FromArgb(13, 13, 20);
         AutoScaleMode = AutoScaleMode.Dpi;
@@ -98,108 +89,50 @@ public class EditorForm : Form
         }
         catch { }
 
-        // === Header ===
-        _headerPanel = new Panel
+        // ========== TOOLBAR (top) ==========
+        var toolbar = new FlowLayoutPanel
         {
             Dock = DockStyle.Top,
-            Height = 44,
-            BackColor = Color.FromArgb(22, 22, 34),
-            Padding = new Padding(16, 0, 16, 0)
-        };
-
-        var logo = new Label
-        {
-            Text = "Skjermbilde.no",
-            AutoSize = true,
-            ForeColor = Color.FromArgb(240, 240, 255),
-            Font = new Font("Segoe UI", 11f, FontStyle.Bold),
-            Location = new Point(16, 11)
-        };
-        _headerPanel.Controls.Add(logo);
-
-        // Zoom controls (right side)
-        var zoomPanel = new FlowLayoutPanel
-        {
-            AutoSize = true,
-            FlowDirection = FlowDirection.LeftToRight,
-            BackColor = Color.Transparent
-        };
-
-        AddHeaderButton(zoomPanel, "+", "Zoom inn (+)", () => SetZoom(_zoomLevel + 0.25f));
-        AddHeaderButton(zoomPanel, "-", "Zoom ut (-)", () => SetZoom(_zoomLevel - 0.25f));
-        AddHeaderButton(zoomPanel, "Tilpass", "Tilpass vindu (0)", () => SetZoom(1f));
-
-        _headerPanel.Controls.Add(zoomPanel);
-        _headerPanel.Resize += (_, _) => zoomPanel.Location = new Point(_headerPanel.Width - zoomPanel.PreferredSize.Width - 16, 6);
-        zoomPanel.Location = new Point(_headerPanel.Width - 160, 6);
-
-        Controls.Add(_headerPanel);
-
-        // === Toolbar ===
-        _toolbarPanel = new Panel
-        {
-            Dock = DockStyle.Top,
-            Height = 48,
+            Height = S(46),
             BackColor = Color.FromArgb(26, 26, 40),
-            Padding = new Padding(8, 6, 8, 6)
-        };
-
-        var toolFlow = new FlowLayoutPanel
-        {
-            Dock = DockStyle.Fill,
-            FlowDirection = FlowDirection.LeftToRight,
-            BackColor = Color.Transparent,
+            Padding = new Padding(S(6), S(4), S(6), S(4)),
             WrapContents = false
         };
 
-        // Drawing tools
-        AddToolButton(toolFlow, "1", "Nummer (N)", Tool.Number);
-        AddToolButton(toolFlow, "\u2192", "Pil (A)", Tool.Arrow);
-        AddToolButton(toolFlow, "\u25A1", "Rektangel (R)", Tool.Rectangle);
-        AddToolButton(toolFlow, "T", "Tekst (T)", Tool.Text);
-        AddToolButton(toolFlow, "\u2248", "Blur (B)", Tool.Blur);
-        AddToolButton(toolFlow, "\u2702", "Beskjaer (C)", Tool.Crop);
-        AddToolButton(toolFlow, "\u270E", "Penn", Tool.Pen);
-        AddToolButton(toolFlow, "\u25CB", "Ellipse", Tool.Ellipse);
+        // Tool buttons
+        AddTool(toolbar, "Num", Tool.Number);
+        AddTool(toolbar, "Pil", Tool.Arrow);
+        AddTool(toolbar, "Rekt", Tool.Rectangle);
+        AddTool(toolbar, "Tekst", Tool.Text);
+        AddTool(toolbar, "Blur", Tool.Blur);
+        AddTool(toolbar, "Crop", Tool.Crop);
+        AddTool(toolbar, "Penn", Tool.Pen);
+        AddTool(toolbar, "Ellipse", Tool.Ellipse);
 
-        AddToolSeparator(toolFlow);
+        toolbar.Controls.Add(MakeSep());
 
-        // Undo/Redo/Clear
-        var undoBtn = MakeToolbarButton("\u21A9", "Angre (Ctrl+Z)");
-        undoBtn.Click += (_, _) => Undo();
-        toolFlow.Controls.Add(undoBtn);
+        AddAction(toolbar, "Angre", () => Undo());
+        AddAction(toolbar, "Gjenta", () => Redo());
+        AddAction(toolbar, "Slett", () => ClearAll());
 
-        var redoBtn = MakeToolbarButton("\u21AA", "Gjenta (Ctrl+Y)");
-        redoBtn.Click += (_, _) => Redo();
-        toolFlow.Controls.Add(redoBtn);
+        toolbar.Controls.Add(MakeSep());
 
-        var clearBtn = MakeToolbarButton("\u2716", "Slett alle");
-        clearBtn.Click += (_, _) => ClearAll();
-        toolFlow.Controls.Add(clearBtn);
-
-        AddToolSeparator(toolFlow);
-
-        // Size control
-        var sizeLabel = new Label
+        // Size slider
+        toolbar.Controls.Add(new Label
         {
             Text = "Str:",
             AutoSize = true,
-            ForeColor = Color.FromArgb(152, 152, 184),
+            ForeColor = Color.FromArgb(170, 170, 190),
             Font = new Font("Segoe UI", 9f),
-            Margin = new Padding(4, 9, 0, 0)
-        };
-        toolFlow.Controls.Add(sizeLabel);
-
+            Margin = new Padding(S(4), S(8), 0, 0)
+        });
         var sizeTrack = new TrackBar
         {
-            Minimum = 1,
-            Maximum = 30,
-            Value = 4,
-            Width = 100,
-            Height = 32,
+            Minimum = 1, Maximum = 30, Value = 4,
+            Width = S(90), Height = S(30),
             TickStyle = TickStyle.None,
             BackColor = Color.FromArgb(26, 26, 40),
-            Margin = new Padding(0, 2, 0, 0)
+            Margin = new Padding(0, S(2), 0, 0)
         };
         var sizeVal = new Label
         {
@@ -207,433 +140,342 @@ public class EditorForm : Form
             AutoSize = true,
             ForeColor = Color.FromArgb(200, 200, 220),
             Font = new Font("Segoe UI", 9f),
-            Margin = new Padding(2, 9, 0, 0)
+            Margin = new Padding(0, S(8), 0, 0)
         };
         sizeTrack.ValueChanged += (_, _) => { _penWidth = sizeTrack.Value; sizeVal.Text = sizeTrack.Value.ToString(); };
-        toolFlow.Controls.Add(sizeTrack);
-        toolFlow.Controls.Add(sizeVal);
+        toolbar.Controls.Add(sizeTrack);
+        toolbar.Controls.Add(sizeVal);
 
-        _toolbarPanel.Controls.Add(toolFlow);
-        Controls.Add(_toolbarPanel);
+        Controls.Add(toolbar);
 
-        // === Status bar ===
-        _statusPanel = new Panel
+        // ========== STATUS BAR (bottom) ==========
+        var statusBar = new Panel
         {
             Dock = DockStyle.Bottom,
-            Height = 24,
+            Height = S(24),
             BackColor = Color.FromArgb(18, 18, 28)
         };
         _statusLabel = new Label
         {
             AutoSize = true,
-            ForeColor = Color.FromArgb(100, 100, 130),
+            ForeColor = Color.FromArgb(120, 120, 150),
             Font = new Font("Segoe UI", 8.5f),
-            Location = new Point(8, 4),
-            Text = "Klar"
+            Location = new Point(S(8), S(3)),
+            Text = $"{_current.Width} x {_current.Height}"
         };
-        _statusPanel.Controls.Add(_statusLabel);
-        Controls.Add(_statusPanel);
+        statusBar.Controls.Add(_statusLabel);
+        Controls.Add(statusBar);
 
-        // === Side panel ===
+        // ========== SIDE PANEL (right) ==========
         _sidePanel = new Panel
         {
             Dock = DockStyle.Right,
-            Width = 200,
+            Width = S(210),
             BackColor = Color.FromArgb(22, 22, 34),
-            Padding = new Padding(12, 12, 12, 12),
-            AutoScroll = true
+            AutoScroll = true,
+            Padding = new Padding(S(14), S(12), S(14), S(12))
         };
 
-        var sideLay = new FlowLayoutPanel
+        var side = new FlowLayoutPanel
         {
             Dock = DockStyle.Fill,
             FlowDirection = FlowDirection.TopDown,
             WrapContents = false,
-            AutoSize = false,
             BackColor = Color.Transparent
         };
 
-        // Color section
-        sideLay.Controls.Add(MakeSideSectionLabel("Farger"));
+        // -- Colors --
+        side.Controls.Add(SideLabel("Farger"));
         _colorGrid = new FlowLayoutPanel
         {
-            Width = 170,
-            Height = 48,
+            Width = S(180), Height = S(44),
             FlowDirection = FlowDirection.LeftToRight,
             BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 8)
+            Margin = new Padding(0, 0, 0, S(4))
         };
-        foreach (var c in ColorPresets)
+        foreach (var c in Presets)
         {
-            var colorBtn = new Panel
+            var swatch = new Panel
             {
-                Size = new Size(28, 28),
+                Size = new Size(S(26), S(26)),
                 BackColor = c,
-                Margin = new Padding(3),
+                Margin = new Padding(S(2)),
                 Cursor = Cursors.Hand
             };
-            var capturedColor = c;
-            colorBtn.Paint += (s, pe) =>
+            var cc = c;
+            swatch.Paint += (_, pe) =>
             {
-                if (capturedColor == _drawColor)
-                {
-                    using var pen = new Pen(capturedColor == Color.White ? Color.FromArgb(37, 99, 235) : Color.White, 2);
-                    pe.Graphics.DrawRectangle(pen, 1, 1, 24, 24);
-                }
+                if (cc == _drawColor)
+                    using (var p = new Pen(cc == Color.White ? Color.FromArgb(37, 99, 235) : Color.White, 2))
+                        pe.Graphics.DrawRectangle(p, 1, 1, swatch.Width - 3, swatch.Height - 3);
             };
-            colorBtn.Click += (_, _) =>
-            {
-                _drawColor = capturedColor;
-                _colorGrid!.Invalidate(true);
-                UpdateNumberPreview();
-            };
-            _colorGrid.Controls.Add(colorBtn);
+            swatch.Click += (_, _) => { _drawColor = cc; _colorGrid.Invalidate(true); _numberPreviewLabel?.Invalidate(); };
+            _colorGrid.Controls.Add(swatch);
         }
-        sideLay.Controls.Add(_colorGrid);
+        side.Controls.Add(_colorGrid);
 
-        // Custom color
-        var customColorBtn = new Button
-        {
-            Text = "Velg farge...",
-            Size = new Size(170, 28),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(152, 152, 184),
-            Font = new Font("Segoe UI", 8.5f),
-            Cursor = Cursors.Hand,
-            Margin = new Padding(0, 0, 0, 12)
-        };
-        customColorBtn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
-        customColorBtn.Click += (_, _) =>
+        var pickBtn = SideButton("Velg farge...", false);
+        pickBtn.Click += (_, _) =>
         {
             using var dlg = new ColorDialog { Color = _drawColor, FullOpen = true };
             if (dlg.ShowDialog() == DialogResult.OK)
             {
                 _drawColor = dlg.Color;
-                _colorGrid!.Invalidate(true);
-                UpdateNumberPreview();
+                _colorGrid.Invalidate(true);
+                _numberPreviewLabel?.Invalidate();
             }
         };
-        sideLay.Controls.Add(customColorBtn);
+        side.Controls.Add(pickBtn);
 
-        // Number section
+        // -- Number preview --
         _numberSection = new Panel
         {
-            Width = 170,
-            Height = 80,
+            Width = S(180), Height = S(70),
             BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 8)
+            Margin = new Padding(0, S(4), 0, S(4))
         };
-        var numLabel = MakeSideSectionLabel("Neste markering");
-        numLabel.Location = new Point(0, 0);
-        _numberSection.Controls.Add(numLabel);
-
-        _numberPreview = new Label
+        _numberSection.Controls.Add(new Label
         {
-            Size = new Size(40, 40),
-            Location = new Point(0, 24),
+            Text = "Neste markering",
+            AutoSize = true,
+            ForeColor = Color.FromArgb(152, 152, 184),
+            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+            Location = new Point(0, 0)
+        });
+        _numberPreviewLabel = new Label
+        {
+            Size = new Size(S(38), S(38)),
+            Location = new Point(0, S(22)),
             BackColor = Color.Transparent
         };
-        _numberPreview.Paint += (s, pe) =>
+        _numberPreviewLabel.Paint += (_, pe) =>
         {
             pe.Graphics.SmoothingMode = SmoothingMode.AntiAlias;
+            var sz = _numberPreviewLabel.Width - 4;
             using var b = new SolidBrush(_drawColor);
-            pe.Graphics.FillEllipse(b, 2, 2, 36, 36);
-            using var borderPen = new Pen(Color.White, 2);
-            pe.Graphics.DrawEllipse(borderPen, 2, 2, 36, 36);
-            using var textBrush = new SolidBrush(Color.White);
-            using var font = new Font("Segoe UI", 13f, FontStyle.Bold);
-            var text = _numberCounter.ToString();
-            var sz = pe.Graphics.MeasureString(text, font);
-            pe.Graphics.DrawString(text, font, textBrush, (40 - sz.Width) / 2, (40 - sz.Height) / 2);
+            pe.Graphics.FillEllipse(b, 2, 2, sz, sz);
+            using var wp = new Pen(Color.White, 2);
+            pe.Graphics.DrawEllipse(wp, 2, 2, sz, sz);
+            using var f = new Font("Segoe UI", sz * 0.38f, FontStyle.Bold);
+            using var wb = new SolidBrush(Color.White);
+            var t = _numberCounter.ToString();
+            var ms = pe.Graphics.MeasureString(t, f);
+            pe.Graphics.DrawString(t, f, wb, (sz + 4 - ms.Width) / 2, (sz + 4 - ms.Height) / 2);
         };
-        _numberSection.Controls.Add(_numberPreview);
+        _numberSection.Controls.Add(_numberPreviewLabel);
 
-        var resetNumBtn = new Button
-        {
-            Text = "Nullstill",
-            Size = new Size(70, 28),
-            Location = new Point(50, 28),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(152, 152, 184),
-            Font = new Font("Segoe UI", 8f),
-            Cursor = Cursors.Hand
-        };
-        resetNumBtn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
-        resetNumBtn.Click += (_, _) => { _numberCounter = 1; UpdateNumberPreview(); };
-        _numberSection.Controls.Add(resetNumBtn);
-        sideLay.Controls.Add(_numberSection);
+        var resetBtn = SideButton("Nullstill", false);
+        resetBtn.Size = new Size(S(70), S(26));
+        resetBtn.Location = new Point(S(48), S(26));
+        resetBtn.Click += (_, _) => { _numberCounter = 1; _numberPreviewLabel.Invalidate(); };
+        _numberSection.Controls.Add(resetBtn);
+        side.Controls.Add(_numberSection);
 
-        // Text size section
-        var tsSectionLabel = MakeSideSectionLabel("Tekststorrelse");
-        sideLay.Controls.Add(tsSectionLabel);
-        _textSizeSection = new FlowLayoutPanel
+        // -- Text size --
+        side.Controls.Add(SideLabel("Tekststorrelse"));
+        _textSizePanel = new FlowLayoutPanel
         {
-            Width = 170,
-            Height = 36,
+            Width = S(180), Height = S(34),
             FlowDirection = FlowDirection.LeftToRight,
             BackColor = Color.Transparent,
-            Margin = new Padding(0, 0, 0, 12),
-            Visible = false
+            Margin = new Padding(0, 0, 0, S(8))
         };
-        foreach (var (label, size) in TextSizes)
+        foreach (var (lbl, sz) in new[] { ("XS", 12f), ("S", 16f), ("M", 20f), ("L", 28f), ("XL", 36f) })
         {
-            var tsBtn = new Button
+            var tsb = new Button
             {
-                Text = label,
-                Size = new Size(30, 28),
+                Text = lbl,
+                Size = new Size(S(32), S(28)),
                 FlatStyle = FlatStyle.Flat,
-                BackColor = size == _textSize ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45),
+                BackColor = sz == _textSize ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45),
                 ForeColor = Color.White,
-                Font = new Font("Segoe UI", 8f),
+                Font = new Font("Segoe UI", 8.5f),
                 Cursor = Cursors.Hand,
-                Tag = size,
-                Margin = new Padding(1)
+                Tag = sz,
+                Margin = new Padding(S(1))
             };
-            tsBtn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
-            tsBtn.Click += (s, _) =>
+            tsb.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
+            tsb.Click += (s, _) =>
             {
                 _textSize = (float)(s as Button)!.Tag!;
-                foreach (Control c in _textSizeSection!.Controls)
-                    if (c is Button btn) btn.BackColor = (float)btn.Tag! == _textSize
+                foreach (Control c in _textSizePanel.Controls)
+                    if (c is Button b) b.BackColor = (float)b.Tag! == _textSize
                         ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45);
             };
-            _textSizeSection.Controls.Add(tsBtn);
+            _textSizePanel.Controls.Add(tsb);
         }
-        sideLay.Controls.Add(_textSizeSection);
+        side.Controls.Add(_textSizePanel);
 
-        // Separator
-        sideLay.Controls.Add(new Panel { Width = 170, Height = 1, BackColor = Color.FromArgb(40, 40, 60), Margin = new Padding(0, 8, 0, 12) });
+        // -- Separator --
+        side.Controls.Add(new Panel { Width = S(180), Height = 1, BackColor = Color.FromArgb(45, 45, 65), Margin = new Padding(0, S(6), 0, S(10)) });
 
-        // Action buttons
-        AddSideActionButton(sideLay, "Kopier", "copy");
-        AddSideActionButton(sideLay, "Lagre lokalt", "save");
-        AddSideActionButton(sideLay, "Hurtigdeling", "share");
-        AddSideActionButton(sideLay, "Last opp", "upload");
+        // -- Action buttons --
+        var copyBtn = SideButton("Kopier", false);
+        copyBtn.BackColor = Color.FromArgb(20, 60, 45);
+        copyBtn.FlatAppearance.BorderColor = Color.FromArgb(34, 197, 94);
+        copyBtn.Click += (_, _) => CopyToClipboard();
+        side.Controls.Add(copyBtn);
 
-        _sidePanel.Controls.Add(sideLay);
+        var saveBtn = SideButton("Lagre lokalt", false);
+        saveBtn.Click += (_, _) => SaveDialog();
+        side.Controls.Add(saveBtn);
+
+        var shareBtn = SideButton("Hurtigdeling", true);
+        shareBtn.Click += async (_, _) => await QuickShareFromEditor();
+        side.Controls.Add(shareBtn);
+
+        var uploadBtn = SideButton("Last opp", false);
+        uploadBtn.Click += async (_, _) => await UploadFromEditor();
+        side.Controls.Add(uploadBtn);
+
+        _sidePanel.Controls.Add(side);
         Controls.Add(_sidePanel);
 
-        // === Canvas ===
-        var canvasContainer = new Panel
+        // ========== CANVAS (center, fill) ==========
+        var canvasPanel = new Panel
         {
             Dock = DockStyle.Fill,
             BackColor = Color.FromArgb(13, 13, 20)
         };
-
         _pictureBox = new PictureBox
         {
+            Dock = DockStyle.Fill,
             SizeMode = PictureBoxSizeMode.Zoom,
             BackColor = Color.FromArgb(13, 13, 20),
-            Cursor = Cursors.Cross,
-            Dock = DockStyle.Fill
+            Cursor = Cursors.Cross
         };
-        _pictureBox.MouseDown += PictureBox_MouseDown;
-        _pictureBox.MouseMove += PictureBox_MouseMove;
-        _pictureBox.MouseUp += PictureBox_MouseUp;
-
-        canvasContainer.Controls.Add(_pictureBox);
-        Controls.Add(canvasContainer);
-        canvasContainer.BringToFront();
+        _pictureBox.MouseDown += Canvas_MouseDown;
+        _pictureBox.MouseMove += Canvas_MouseMove;
+        _pictureBox.MouseUp += Canvas_MouseUp;
+        canvasPanel.Controls.Add(_pictureBox);
+        Controls.Add(canvasPanel);
+        canvasPanel.BringToFront();
     }
 
-    private void AddSideActionButton(FlowLayoutPanel parent, string text, string type)
+    // ====== UI helpers ======
+
+    private void AddTool(FlowLayoutPanel parent, string label, Tool tool)
     {
-        Color bg, borderColor;
-        switch (type)
-        {
-            case "copy":
-                bg = Color.FromArgb(20, 60, 45);
-                borderColor = Color.FromArgb(34, 197, 94);
-                break;
-            case "share":
-                bg = Color.FromArgb(37, 99, 235);
-                borderColor = Color.FromArgb(59, 130, 246);
-                break;
-            default:
-                bg = Color.FromArgb(30, 30, 45);
-                borderColor = Color.FromArgb(50, 50, 70);
-                break;
-        }
-
-        var btn = new Button
-        {
-            Text = text,
-            Size = new Size(170, 36),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = bg,
-            ForeColor = Color.White,
-            Font = new Font("Segoe UI", 9.5f),
-            Cursor = Cursors.Hand,
-            Margin = new Padding(0, 2, 0, 2),
-            TextAlign = ContentAlignment.MiddleCenter
-        };
-        btn.FlatAppearance.BorderColor = borderColor;
-
-        switch (type)
-        {
-            case "copy": btn.Click += (_, _) => CopyToClipboard(); break;
-            case "save": btn.Click += (_, _) => SaveDialog(); break;
-            case "share": btn.Click += async (_, _) => await QuickShareFromEditor(); break;
-            case "upload": btn.Click += async (_, _) => await UploadFromEditor(); break;
-        }
-
-        parent.Controls.Add(btn);
-    }
-
-    private void AddHeaderButton(FlowLayoutPanel parent, string text, string tooltip, Action onClick)
-    {
-        var btn = new Button
-        {
-            Text = text,
-            Size = new Size(text.Length > 2 ? 60 : 36, 30),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(200, 200, 220),
-            Font = new Font("Segoe UI", 9f),
-            Cursor = Cursors.Hand,
-            Margin = new Padding(2)
-        };
-        btn.FlatAppearance.BorderColor = Color.FromArgb(50, 50, 70);
-        var tip = new ToolTip();
-        tip.SetToolTip(btn, tooltip);
-        btn.Click += (_, _) => onClick();
-        parent.Controls.Add(btn);
-    }
-
-    private Button MakeToolbarButton(string text, string tooltip)
-    {
-        var btn = new Button
-        {
-            Text = text,
-            Size = new Size(36, 34),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = Color.FromArgb(30, 30, 45),
-            ForeColor = Color.FromArgb(200, 200, 220),
-            Font = new Font("Segoe UI", 10f),
-            Cursor = Cursors.Hand,
-            Margin = new Padding(2)
-        };
-        btn.FlatAppearance.BorderColor = Color.FromArgb(40, 40, 55);
-        var tip = new ToolTip();
-        tip.SetToolTip(btn, tooltip);
-        return btn;
-    }
-
-    private void AddToolButton(FlowLayoutPanel parent, string text, string tooltip, Tool tool)
-    {
-        var btn = MakeToolbarButton(text, tooltip);
+        var btn = MakeBtn(label);
         btn.Tag = tool;
-        btn.Click += (_, _) => { _tool = tool; UpdateToolSelection(); };
+        btn.Click += (_, _) => { _tool = tool; HighlightActiveTool(); };
         _toolButtons.Add(btn);
         parent.Controls.Add(btn);
     }
 
-    private void AddToolSeparator(FlowLayoutPanel parent)
+    private void AddAction(FlowLayoutPanel parent, string label, Action action)
     {
-        parent.Controls.Add(new Panel
-        {
-            Size = new Size(1, 34),
-            BackColor = Color.FromArgb(50, 50, 70),
-            Margin = new Padding(6, 2, 6, 0)
-        });
+        var btn = MakeBtn(label);
+        btn.Click += (_, _) => action();
+        parent.Controls.Add(btn);
     }
 
-    private void UpdateToolSelection()
+    private Button MakeBtn(string text)
     {
-        foreach (var btn in _toolButtons)
-        {
-            var isActive = btn.Tag is Tool t && t == _tool;
-            btn.BackColor = isActive ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45);
-            btn.ForeColor = isActive ? Color.White : Color.FromArgb(200, 200, 220);
-        }
-        if (_numberSection != null) _numberSection.Visible = _tool == Tool.Number;
-        if (_textSizeSection != null) _textSizeSection.Visible = _tool == Tool.Text;
-        UpdateStatus();
-    }
-
-    private void UpdateNumberPreview()
-    {
-        _numberPreview?.Invalidate();
-    }
-
-    private static Label MakeSideSectionLabel(string text)
-    {
-        return new Label
+        var w = Math.Max(S(40), TextRenderer.MeasureText(text, new Font("Segoe UI", 9f)).Width + S(14));
+        return new Button
         {
             Text = text,
-            AutoSize = true,
-            ForeColor = Color.FromArgb(152, 152, 184),
-            Font = new Font("Segoe UI", 9f, FontStyle.Bold),
-            Margin = new Padding(0, 4, 0, 4)
+            Size = new Size(w, S(34)),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(30, 30, 45),
+            ForeColor = Color.FromArgb(210, 210, 230),
+            Font = new Font("Segoe UI", 9f),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(S(1)),
+            FlatAppearance = { BorderColor = Color.FromArgb(45, 45, 60) }
         };
     }
 
-    private void SetZoom(float level)
+    private Panel MakeSep() => new()
     {
-        _zoomLevel = Math.Max(0.25f, Math.Min(4f, level));
-        UpdateCanvas();
+        Size = new Size(1, S(30)),
+        BackColor = Color.FromArgb(55, 55, 75),
+        Margin = new Padding(S(4), S(4), S(4), 0)
+    };
+
+    private Label SideLabel(string text) => new()
+    {
+        Text = text,
+        AutoSize = true,
+        ForeColor = Color.FromArgb(152, 152, 184),
+        Font = new Font("Segoe UI", 9f, FontStyle.Bold),
+        Margin = new Padding(0, S(4), 0, S(4))
+    };
+
+    private Button SideButton(string text, bool primary)
+    {
+        var btn = new Button
+        {
+            Text = text,
+            Size = new Size(S(180), S(36)),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = primary ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45),
+            ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9.5f),
+            Cursor = Cursors.Hand,
+            Margin = new Padding(0, S(2), 0, S(2))
+        };
+        btn.FlatAppearance.BorderColor = primary ? Color.FromArgb(59, 130, 246) : Color.FromArgb(50, 50, 70);
+        return btn;
+    }
+
+    private void HighlightActiveTool()
+    {
+        foreach (var b in _toolButtons)
+        {
+            var active = b.Tag is Tool t && t == _tool;
+            b.BackColor = active ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45);
+            b.ForeColor = active ? Color.White : Color.FromArgb(210, 210, 230);
+        }
+        _numberSection.Visible = _tool == Tool.Number;
+        _textSizePanel.Visible = _tool == Tool.Text;
         UpdateStatus();
     }
 
     private void UpdateStatus()
     {
-        if (_statusLabel == null) return;
-        var toolNames = new Dictionary<Tool, string>
+        var names = new Dictionary<Tool, string>
         {
-            { Tool.None, "Ingen" }, { Tool.Pen, "Penn" }, { Tool.Rectangle, "Rektangel" },
-            { Tool.Ellipse, "Ellipse" }, { Tool.Arrow, "Pil" }, { Tool.Text, "Tekst" },
-            { Tool.Number, "Nummer" }, { Tool.Blur, "Blur" }, { Tool.Crop, "Beskjaer" }
+            {Tool.None,""},  {Tool.Pen,"Penn"}, {Tool.Rectangle,"Rektangel"}, {Tool.Ellipse,"Ellipse"},
+            {Tool.Arrow,"Pil"}, {Tool.Text,"Tekst"}, {Tool.Number,"Nummer"}, {Tool.Blur,"Blur"}, {Tool.Crop,"Crop"}
         };
-        var toolName = toolNames.GetValueOrDefault(_tool, "Ukjent");
-        _statusLabel.Text = $"{_current.Width} x {_current.Height} px  |  {toolName}  |  {(int)(_zoomLevel * 100)}%";
+        _statusLabel.Text = $"{_current.Width} x {_current.Height}  |  {names.GetValueOrDefault(_tool, "")}";
     }
 
-    // ===== Drawing Logic =====
+    // ====== Canvas events ======
 
-    private Point ScreenToImage(Point screenPt)
+    private Point ScreenToImage(Point p)
     {
-        if (_pictureBox.Image == null) return screenPt;
-        var imgRect = GetImageRect();
-        var scaleX = (float)_current.Width / imgRect.Width;
-        var scaleY = (float)_current.Height / imgRect.Height;
+        if (_pictureBox.Image == null) return p;
+        float rx = (float)_pictureBox.ClientSize.Width / _current.Width;
+        float ry = (float)_pictureBox.ClientSize.Height / _current.Height;
+        float r = Math.Min(rx, ry);
+        float w = _current.Width * r, h = _current.Height * r;
+        float ox = (_pictureBox.ClientSize.Width - w) / 2f;
+        float oy = (_pictureBox.ClientSize.Height - h) / 2f;
         return new Point(
-            (int)((screenPt.X - imgRect.X) * scaleX),
-            (int)((screenPt.Y - imgRect.Y) * scaleY));
+            Math.Clamp((int)((p.X - ox) / r), 0, _current.Width - 1),
+            Math.Clamp((int)((p.Y - oy) / r), 0, _current.Height - 1));
     }
 
-    private RectangleF GetImageRect()
-    {
-        if (_pictureBox.Image == null) return _pictureBox.ClientRectangle;
-        float ratioX = (float)_pictureBox.ClientSize.Width / _current.Width;
-        float ratioY = (float)_pictureBox.ClientSize.Height / _current.Height;
-        float ratio = Math.Min(ratioX, ratioY);
-        float w = _current.Width * ratio;
-        float h = _current.Height * ratio;
-        float x = (_pictureBox.ClientSize.Width - w) / 2f;
-        float y = (_pictureBox.ClientSize.Height - h) / 2f;
-        return new RectangleF(x, y, w, h);
-    }
-
-    private void PictureBox_MouseDown(object? sender, MouseEventArgs e)
+    private void Canvas_MouseDown(object? s, MouseEventArgs e)
     {
         if (e.Button != MouseButtons.Left) return;
 
-        if (_tool == Tool.Text) { PlaceTextInput(e.Location); return; }
+        if (_tool == Tool.Text) { PlaceText(e.Location); return; }
 
         if (_tool == Tool.Number)
         {
-            var imgPt = ScreenToImage(e.Location);
-            var action = new DrawAction
+            var pt = ScreenToImage(e.Location);
+            _actions.Add(new DrawAction
             {
                 Tool = Tool.Number, Color = _drawColor, PenWidth = _penWidth,
-                StartPoint = imgPt, NumberValue = _numberCounter++
-            };
-            _actions.Add(action);
+                StartPoint = pt, NumberValue = _numberCounter++
+            });
             _redoStack.Clear();
             Redraw();
-            UpdateNumberPreview();
+            _numberPreviewLabel?.Invalidate();
             return;
         }
 
@@ -647,47 +489,35 @@ public class EditorForm : Form
         };
     }
 
-    private void PictureBox_MouseMove(object? sender, MouseEventArgs e)
+    private void Canvas_MouseMove(object? s, MouseEventArgs e)
     {
-        // Update status with cursor position
-        if (_pictureBox.Image != null)
-        {
-            var imgPt = ScreenToImage(e.Location);
-            var imgRect = GetImageRect();
-            if (imgRect.Contains(e.Location))
-            {
-                var toolNames = new Dictionary<Tool, string>
-                {
-                    { Tool.None, "Ingen" }, { Tool.Pen, "Penn" }, { Tool.Rectangle, "Rektangel" },
-                    { Tool.Ellipse, "Ellipse" }, { Tool.Arrow, "Pil" }, { Tool.Text, "Tekst" },
-                    { Tool.Number, "Nummer" }, { Tool.Blur, "Blur" }, { Tool.Crop, "Beskjaer" }
-                };
-                if (_statusLabel != null)
-                    _statusLabel.Text = $"{imgPt.X}, {imgPt.Y}  |  {_current.Width} x {_current.Height}  |  {toolNames.GetValueOrDefault(_tool, "")}  |  {(int)(_zoomLevel * 100)}%";
-            }
-        }
+        var imgPt = ScreenToImage(e.Location);
+        _statusLabel.Text = $"{imgPt.X}, {imgPt.Y}  |  {_current.Width} x {_current.Height}";
 
         if (!_drawing || _currentAction == null) return;
-        var pt = ScreenToImage(e.Location);
 
         if (_tool == Tool.Pen)
         {
-            _currentAction.Points.Add(pt);
+            _currentAction.Points.Add(imgPt);
             using var g = Graphics.FromImage(_current);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             using var pen = new Pen(_drawColor, _penWidth) { StartCap = LineCap.Round, EndCap = LineCap.Round };
-            g.DrawLine(pen, _lastPoint, pt);
-            _lastPoint = pt;
+            g.DrawLine(pen, _lastPoint, imgPt);
+            _lastPoint = imgPt;
             UpdateCanvas();
         }
         else
         {
-            _currentAction.EndPoint = pt;
-            RedrawWithPreview();
+            _currentAction.EndPoint = imgPt;
+            // For crop, just preview the rect without full redraw of all actions
+            if (_tool == Tool.Crop)
+                RedrawFast();
+            else
+                RedrawWithPreview();
         }
     }
 
-    private void PictureBox_MouseUp(object? sender, MouseEventArgs e)
+    private void Canvas_MouseUp(object? s, MouseEventArgs e)
     {
         if (!_drawing || _currentAction == null) return;
         _drawing = false;
@@ -695,9 +525,8 @@ public class EditorForm : Form
 
         if (_tool == Tool.Crop)
         {
-            var rect = GetRect(_currentAction.StartPoint, _currentAction.EndPoint);
-            if (rect.Width > 5 && rect.Height > 5)
-                ShowCropConfirmation(rect);
+            var rect = MakeRect(_currentAction.StartPoint, _currentAction.EndPoint);
+            if (rect.Width > 5 && rect.Height > 5) ShowCropBar(rect);
             _currentAction = null;
             return;
         }
@@ -708,85 +537,99 @@ public class EditorForm : Form
         _currentAction = null;
     }
 
-    private void PlaceTextInput(Point screenLocation)
-    {
-        CommitTextInput();
-        var imgPt = ScreenToImage(screenLocation);
+    // ====== Text ======
 
+    private void PlaceText(Point screenPt)
+    {
+        CommitText();
+        var imgPt = ScreenToImage(screenPt);
         _activeTextBox = new TextBox
         {
-            Location = screenLocation,
+            Location = screenPt,
             Font = new Font("Segoe UI", _textSize * 0.6f, FontStyle.Bold),
             BackColor = Color.FromArgb(30, 30, 45),
             ForeColor = _drawColor,
             BorderStyle = BorderStyle.None,
-            Width = 300,
+            Width = S(300),
             Tag = imgPt
         };
-        _activeTextBox.KeyDown += (s, ke) =>
+        _activeTextBox.KeyDown += (_, ke) =>
         {
-            if (ke.KeyCode == Keys.Enter) { ke.SuppressKeyPress = true; CommitTextInput(); }
+            if (ke.KeyCode == Keys.Enter) { ke.SuppressKeyPress = true; CommitText(); }
             else if (ke.KeyCode == Keys.Escape) { _activeTextBox?.Dispose(); _activeTextBox = null; }
         };
         _pictureBox.Controls.Add(_activeTextBox);
         _activeTextBox.Focus();
     }
 
-    private void CommitTextInput()
+    private void CommitText()
     {
         if (_activeTextBox == null || string.IsNullOrWhiteSpace(_activeTextBox.Text))
         {
-            _activeTextBox?.Dispose();
-            _activeTextBox = null;
-            return;
+            _activeTextBox?.Dispose(); _activeTextBox = null; return;
         }
-        var imgPt = (Point)_activeTextBox.Tag!;
         _actions.Add(new DrawAction
         {
-            Tool = Tool.Text, Color = _drawColor, PenWidth = _penWidth,
-            StartPoint = imgPt, TextContent = _activeTextBox.Text, TextSize = _textSize
+            Tool = Tool.Text, Color = _drawColor, StartPoint = (Point)_activeTextBox.Tag!,
+            TextContent = _activeTextBox.Text, TextSize = _textSize
         });
         _redoStack.Clear();
-        _activeTextBox.Dispose();
-        _activeTextBox = null;
+        _activeTextBox.Dispose(); _activeTextBox = null;
         Redraw();
     }
 
-    private void ShowCropConfirmation(Rectangle cropRect)
+    // ====== Crop ======
+
+    private void ShowCropBar(Rectangle rect)
     {
         _cropping = true;
-        _cropRect = cropRect;
+        _cropRect = rect;
 
         _cropBar = new Panel
         {
-            Size = new Size(300, 44),
-            BackColor = Color.FromArgb(230, 22, 22, 34)
+            Size = new Size(S(340), S(42)),
+            BackColor = Color.FromArgb(235, 26, 26, 40)
         };
-        _cropBar.Location = new Point((_pictureBox.Width - _cropBar.Width) / 2, 10);
+        _cropBar.Location = new Point((_pictureBox.Width - _cropBar.Width) / 2, S(10));
 
         _cropBar.Controls.Add(new Label
         {
-            Text = $"Beskjaer {cropRect.Width}x{cropRect.Height}?",
+            Text = $"Beskjaer {rect.Width} x {rect.Height}?",
             AutoSize = true,
             ForeColor = Color.White,
             Font = new Font("Segoe UI", 9.5f),
-            Location = new Point(10, 12)
+            Location = new Point(S(10), S(10))
         });
 
         var applyBtn = new Button
         {
             Text = "Bruk (Enter)",
-            Size = new Size(90, 30),
-            Location = new Point(185, 7),
+            Size = new Size(S(95), S(30)),
+            Location = new Point(S(175), S(6)),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(37, 99, 235),
             ForeColor = Color.White,
-            Font = new Font("Segoe UI", 8.5f),
+            Font = new Font("Segoe UI", 9f),
             Cursor = Cursors.Hand
         };
         applyBtn.FlatAppearance.BorderSize = 0;
         applyBtn.Click += (_, _) => ApplyCrop();
         _cropBar.Controls.Add(applyBtn);
+
+        var cancelBtn = new Button
+        {
+            Text = "Avbryt (Esc)",
+            Size = new Size(S(95), S(30)),
+            Location = new Point(S(275), S(6)),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = Color.FromArgb(50, 30, 30),
+            ForeColor = Color.FromArgb(240, 86, 86),
+            Font = new Font("Segoe UI", 9f),
+            Cursor = Cursors.Hand
+        };
+        cancelBtn.FlatAppearance.BorderColor = Color.FromArgb(240, 86, 86);
+        cancelBtn.Click += (_, _) => CancelCrop();
+        _cropBar.Controls.Add(cancelBtn);
 
         _pictureBox.Controls.Add(_cropBar);
         Redraw();
@@ -799,15 +642,12 @@ public class EditorForm : Form
         if (rect.Width < 2 || rect.Height < 2) { CancelCrop(); return; }
 
         var cropped = ScreenCapture.CropBitmap(_current, rect);
-        _original.Dispose();
-        _current.Dispose();
+        _original.Dispose(); _current.Dispose();
         _original = new Bitmap(cropped);
         _current = new Bitmap(cropped);
         cropped.Dispose();
-        _actions.Clear();
-        _redoStack.Clear();
-        _numberCounter = 1;
-        UpdateNumberPreview();
+        _actions.Clear(); _redoStack.Clear();
+        _numberCounter = 1; _numberPreviewLabel?.Invalidate();
         CancelCrop();
         UpdateCanvas();
         UpdateStatus();
@@ -825,14 +665,32 @@ public class EditorForm : Form
         Redraw();
     }
 
+    // ====== Drawing engine ======
+
     private void RedrawWithPreview()
     {
         var bmp = new Bitmap(_original);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        foreach (var a in _actions) DrawActionOnGraphics(g, a);
-        if (_currentAction != null) DrawActionOnGraphics(g, _currentAction);
-        if (_cropping) DrawCropOverlay(g, bmp.Width, bmp.Height);
+        foreach (var a in _actions) Paint(g, a);
+        if (_currentAction != null) Paint(g, _currentAction);
+        _current.Dispose();
+        _current = bmp;
+        UpdateCanvas();
+    }
+
+    private void RedrawFast()
+    {
+        // For crop preview: redraw from current + overlay, without rebuilding from original
+        var bmp = new Bitmap(_original);
+        using var g = Graphics.FromImage(bmp);
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        foreach (var a in _actions) Paint(g, a);
+        if (_currentAction != null && _currentAction.Tool == Tool.Crop)
+        {
+            var r = MakeRect(_currentAction.StartPoint, _currentAction.EndPoint);
+            DrawCropOverlay(g, bmp.Width, bmp.Height, r);
+        }
         _current.Dispose();
         _current = bmp;
         UpdateCanvas();
@@ -843,25 +701,25 @@ public class EditorForm : Form
         var bmp = new Bitmap(_original);
         using var g = Graphics.FromImage(bmp);
         g.SmoothingMode = SmoothingMode.AntiAlias;
-        foreach (var a in _actions) DrawActionOnGraphics(g, a);
-        if (_cropping) DrawCropOverlay(g, bmp.Width, bmp.Height);
+        foreach (var a in _actions) Paint(g, a);
+        if (_cropping) DrawCropOverlay(g, bmp.Width, bmp.Height, _cropRect);
         _current.Dispose();
         _current = bmp;
         UpdateCanvas();
     }
 
-    private void DrawCropOverlay(Graphics g, int width, int height)
+    private void DrawCropOverlay(Graphics g, int w, int h, Rectangle r)
     {
         using var dim = new SolidBrush(Color.FromArgb(120, 0, 0, 0));
-        g.FillRectangle(dim, 0, 0, width, _cropRect.Y);
-        g.FillRectangle(dim, 0, _cropRect.Bottom, width, height - _cropRect.Bottom);
-        g.FillRectangle(dim, 0, _cropRect.Y, _cropRect.X, _cropRect.Height);
-        g.FillRectangle(dim, _cropRect.Right, _cropRect.Y, width - _cropRect.Right, _cropRect.Height);
-        using var border = new Pen(Color.FromArgb(37, 99, 235), 2) { DashStyle = DashStyle.Dash };
-        g.DrawRectangle(border, _cropRect);
+        g.FillRectangle(dim, 0, 0, w, r.Y);
+        g.FillRectangle(dim, 0, r.Bottom, w, h - r.Bottom);
+        g.FillRectangle(dim, 0, r.Y, r.X, r.Height);
+        g.FillRectangle(dim, r.Right, r.Y, w - r.Right, r.Height);
+        using var pen = new Pen(Color.FromArgb(37, 99, 235), 2) { DashStyle = DashStyle.Dash };
+        g.DrawRectangle(pen, r);
     }
 
-    private static void DrawActionOnGraphics(Graphics g, DrawAction a)
+    private static void Paint(Graphics g, DrawAction a)
     {
         using var pen = new Pen(a.Color, a.PenWidth) { StartCap = LineCap.Round, EndCap = LineCap.Round };
         using var brush = new SolidBrush(a.Color);
@@ -878,11 +736,11 @@ public class EditorForm : Form
 
             case Tool.Rectangle:
                 pen.LineJoin = LineJoin.Round;
-                g.DrawRectangle(pen, GetRect(a.StartPoint, a.EndPoint));
+                g.DrawRectangle(pen, MakeRect(a.StartPoint, a.EndPoint));
                 break;
 
             case Tool.Ellipse:
-                g.DrawEllipse(pen, GetRect(a.StartPoint, a.EndPoint));
+                g.DrawEllipse(pen, MakeRect(a.StartPoint, a.EndPoint));
                 break;
 
             case Tool.Arrow:
@@ -894,22 +752,19 @@ public class EditorForm : Form
                 if (!string.IsNullOrEmpty(a.TextContent))
                 {
                     using var font = new Font("Segoe UI", a.TextSize, FontStyle.Bold);
-                    var textSize = g.MeasureString(a.TextContent, font);
-                    using var bgBrush = new SolidBrush(Color.FromArgb(180, 20, 20, 30));
-                    g.FillRectangle(bgBrush, a.StartPoint.X - 2, a.StartPoint.Y - 2,
-                        textSize.Width + 4, textSize.Height + 4);
+                    var sz = g.MeasureString(a.TextContent, font);
+                    using var bg = new SolidBrush(Color.FromArgb(180, 20, 20, 30));
+                    g.FillRectangle(bg, a.StartPoint.X - 2, a.StartPoint.Y - 2, sz.Width + 4, sz.Height + 4);
                     g.DrawString(a.TextContent, font, brush, a.StartPoint);
                 }
                 break;
 
             case Tool.Number:
-                var radius = Math.Max((int)(a.PenWidth * 2), 16);
-                var cx = a.StartPoint.X;
-                var cy = a.StartPoint.Y;
-                g.FillEllipse(brush, cx - radius, cy - radius, radius * 2, radius * 2);
-                using (var wp = new Pen(Color.White, 2))
-                    g.DrawEllipse(wp, cx - radius, cy - radius, radius * 2, radius * 2);
-                using (var nf = new Font("Segoe UI", radius * 0.8f, FontStyle.Bold))
+                var rad = Math.Max((int)(a.PenWidth * 2.5), 18);
+                int cx = a.StartPoint.X, cy = a.StartPoint.Y;
+                g.FillEllipse(brush, cx - rad, cy - rad, rad * 2, rad * 2);
+                using (var wp = new Pen(Color.White, 2)) g.DrawEllipse(wp, cx - rad, cy - rad, rad * 2, rad * 2);
+                using (var nf = new Font("Segoe UI", rad * 0.75f, FontStyle.Bold))
                 {
                     var nt = a.NumberValue.ToString();
                     var ns = g.MeasureString(nt, nf);
@@ -919,27 +774,27 @@ public class EditorForm : Form
                 break;
 
             case Tool.Blur:
-                var blurRect = GetRect(a.StartPoint, a.EndPoint);
-                if (blurRect.Width > 2 && blurRect.Height > 2)
+                var br = MakeRect(a.StartPoint, a.EndPoint);
+                if (br.Width > 2 && br.Height > 2)
                 {
-                    var pixelSize = Math.Max(8, (int)(blurRect.Width / 12));
-                    for (int bx = blurRect.X; bx < blurRect.Right; bx += pixelSize)
-                        for (int by = blurRect.Y; by < blurRect.Bottom; by += pixelSize)
-                        {
-                            var pw = Math.Min(pixelSize, blurRect.Right - bx);
-                            var ph = Math.Min(pixelSize, blurRect.Bottom - by);
-                            using var pb = new SolidBrush(Color.FromArgb(140, 40, 40, 50));
-                            g.FillRectangle(pb, bx, by, pw, ph);
-                        }
+                    var psz = Math.Max(6, Math.Min(br.Width, br.Height) / 8);
+                    for (int bx = br.X; bx < br.Right; bx += psz)
+                        for (int by = br.Y; by < br.Bottom; by += psz)
+                            using (var pb = new SolidBrush(Color.FromArgb(160, 30, 30, 40)))
+                                g.FillRectangle(pb, bx, by,
+                                    Math.Min(psz, br.Right - bx),
+                                    Math.Min(psz, br.Bottom - by));
                 }
                 break;
         }
     }
 
-    private static Rectangle GetRect(Point a, Point b) =>
+    private static Rectangle MakeRect(Point a, Point b) =>
         new(Math.Min(a.X, b.X), Math.Min(a.Y, b.Y), Math.Abs(a.X - b.X), Math.Abs(a.Y - b.Y));
 
     private void UpdateCanvas() => _pictureBox.Image = _current;
+
+    // ====== Actions ======
 
     private void Undo()
     {
@@ -947,22 +802,18 @@ public class EditorForm : Form
         var last = _actions[^1];
         _actions.RemoveAt(_actions.Count - 1);
         _redoStack.Add(last);
-        if (last.Tool == Tool.Number)
-            _numberCounter = Math.Max(1, last.NumberValue);
-        Redraw();
-        UpdateNumberPreview();
+        if (last.Tool == Tool.Number) _numberCounter = Math.Max(1, last.NumberValue);
+        Redraw(); _numberPreviewLabel?.Invalidate();
     }
 
     private void Redo()
     {
         if (_redoStack.Count == 0) return;
-        var action = _redoStack[^1];
+        var a = _redoStack[^1];
         _redoStack.RemoveAt(_redoStack.Count - 1);
-        _actions.Add(action);
-        if (action.Tool == Tool.Number)
-            _numberCounter = action.NumberValue + 1;
-        Redraw();
-        UpdateNumberPreview();
+        _actions.Add(a);
+        if (a.Tool == Tool.Number) _numberCounter = a.NumberValue + 1;
+        Redraw(); _numberPreviewLabel?.Invalidate();
     }
 
     private void ClearAll()
@@ -970,156 +821,96 @@ public class EditorForm : Form
         if (_actions.Count == 0) return;
         if (MessageBox.Show("Slett alle markeringer?", "Skjermbilde.no",
             MessageBoxButtons.YesNo, MessageBoxIcon.Question) != DialogResult.Yes) return;
-        _actions.Clear();
-        _redoStack.Clear();
-        _numberCounter = 1;
-        UpdateNumberPreview();
+        _actions.Clear(); _redoStack.Clear();
+        _numberCounter = 1; _numberPreviewLabel?.Invalidate();
         Redraw();
     }
 
     private void CopyToClipboard()
     {
-        CommitTextInput();
+        CommitText();
         Clipboard.SetImage(_current);
-        ShowToast("Kopiert til utklippstavle!");
+        Toast("Kopiert til utklippstavle!");
     }
 
     private void SaveDialog()
     {
-        CommitTextInput();
+        CommitText();
         using var dlg = new SaveFileDialog
         {
             FileName = _settings.GenerateLocalFilename(),
-            Filter = "PNG-bilde|*.png|JPEG|*.jpg",
+            Filter = "PNG|*.png|JPEG|*.jpg",
             InitialDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Desktop)
         };
         if (dlg.ShowDialog() == DialogResult.OK)
         {
             var fmt = dlg.FileName.EndsWith(".jpg", StringComparison.OrdinalIgnoreCase) ? ImageFormat.Jpeg : ImageFormat.Png;
             _current.Save(dlg.FileName, fmt);
-            ShowToast("Lagret!");
+            Toast("Lagret!");
         }
     }
 
     private async System.Threading.Tasks.Task QuickShareFromEditor()
     {
-        CommitTextInput();
-        ShowUploadProgress("Laster opp...");
-
+        CommitText();
         var pngData = ScreenCapture.BitmapToPng(_current);
         var filename = _settings.GenerateLocalFilename();
         if (_settings.SaveLocal) SaveLocal(pngData, filename);
 
+        Toast("Laster opp...");
         var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
         if (result.Success && result.ScreenshotId != null)
         {
-            UpdateUploadProgress("Oppretter delingslenke...");
-            var shareUrl = await ApiClient.CreateShareLink(_settings, result.ScreenshotId);
-            if (shareUrl != null)
-            {
-                Clipboard.SetText(shareUrl);
-                HideUploadProgress();
-                ShowToast("Lenke kopiert!");
-                return;
-            }
+            var url = await ApiClient.CreateShareLink(_settings, result.ScreenshotId);
+            if (url != null) { Clipboard.SetText(url); Toast("Lenke kopiert!"); return; }
         }
-        HideUploadProgress();
-        ShowToast(result.Error ?? "Opplasting feilet", true);
+        Toast(result.Error ?? "Feil ved opplasting", true);
     }
 
     private async System.Threading.Tasks.Task UploadFromEditor()
     {
-        CommitTextInput();
-        ShowUploadProgress("Laster opp...");
-
+        CommitText();
         var pngData = ScreenCapture.BitmapToPng(_current);
         var filename = _settings.GenerateLocalFilename();
         if (_settings.SaveLocal) SaveLocal(pngData, filename);
 
+        Toast("Laster opp...");
         var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
-        HideUploadProgress();
-        ShowToast(result.Success ? "Lastet opp!" : (result.Error ?? "Opplasting feilet"), !result.Success);
+        Toast(result.Success ? "Lastet opp!" : (result.Error ?? "Feil"), !result.Success);
     }
 
-    private void SaveLocal(byte[] pngData, string filename)
+    private void SaveLocal(byte[] data, string filename)
     {
         try
         {
-            var now = DateTime.Now;
-            var dir = Path.Combine(_settings.LocalDir, $"{now.Year}-{now.Month:D2}");
+            var dir = Path.Combine(_settings.LocalDir, $"{DateTime.Now:yyyy-MM}");
             Directory.CreateDirectory(dir);
-            File.WriteAllBytes(Path.Combine(dir, filename), pngData);
+            File.WriteAllBytes(Path.Combine(dir, filename), data);
         }
         catch { }
     }
 
-    // Upload progress
-    private Panel? _uploadPanel;
-
-    private void ShowUploadProgress(string text)
+    private void Toast(string msg, bool error = false)
     {
-        _uploadPanel?.Dispose();
-        _uploadPanel = new Panel
-        {
-            Size = new Size(260, 50),
-            BackColor = Color.FromArgb(230, 22, 22, 34)
-        };
-        _uploadPanel.Location = new Point((_pictureBox.Width - _uploadPanel.Width) / 2, _pictureBox.Height - 70);
-
-        var label = new Label
-        {
-            Text = text, AutoSize = true, ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10f), Location = new Point(12, 8)
-        };
-        _uploadPanel.Controls.Add(label);
-        _uploadPanel.Tag = label;
-
-        var progressBg = new Panel
-        {
-            Size = new Size(236, 4), Location = new Point(12, 34),
-            BackColor = Color.FromArgb(40, 40, 60)
-        };
-        progressBg.Controls.Add(new Panel { Size = new Size(80, 4), BackColor = Color.FromArgb(37, 99, 235) });
-        _uploadPanel.Controls.Add(progressBg);
-
-        _pictureBox.Controls.Add(_uploadPanel);
-    }
-
-    private void UpdateUploadProgress(string text)
-    {
-        if (_uploadPanel?.Tag is Label label) label.Text = text;
-    }
-
-    private void HideUploadProgress()
-    {
-        if (_uploadPanel != null)
-        {
-            _pictureBox.Controls.Remove(_uploadPanel);
-            _uploadPanel.Dispose();
-            _uploadPanel = null;
-        }
-    }
-
-    private void ShowToast(string message, bool isError = false)
-    {
-        var toast = new Panel { Size = new Size(260, 40), BackColor = Color.FromArgb(230, 22, 22, 34) };
-        toast.Location = new Point((_pictureBox.Width - toast.Width) / 2, _pictureBox.Height - 60);
+        var toast = new Panel { Size = new Size(S(260), S(38)), BackColor = Color.FromArgb(235, 22, 22, 34) };
+        toast.Location = new Point((_pictureBox.Width - toast.Width) / 2, _pictureBox.Height - S(55));
         toast.Paint += (_, pe) =>
         {
-            using var bp = new Pen(isError ? Color.FromArgb(240, 86, 86) : Color.FromArgb(34, 197, 94), 1);
-            pe.Graphics.DrawRectangle(bp, 0, 0, toast.Width - 1, toast.Height - 1);
+            using var p = new Pen(error ? Color.FromArgb(240, 86, 86) : Color.FromArgb(34, 197, 94));
+            pe.Graphics.DrawRectangle(p, 0, 0, toast.Width - 1, toast.Height - 1);
         };
         toast.Controls.Add(new Label
         {
-            Text = message, AutoSize = true, ForeColor = Color.White,
-            Font = new Font("Segoe UI", 10f), Location = new Point(12, 10)
+            Text = msg, AutoSize = true, ForeColor = Color.White,
+            Font = new Font("Segoe UI", 9.5f), Location = new Point(S(10), S(8))
         });
         _pictureBox.Controls.Add(toast);
-
         var timer = new Timer { Interval = 3000 };
         timer.Tick += (_, _) => { _pictureBox.Controls.Remove(toast); toast.Dispose(); timer.Dispose(); };
         timer.Start();
     }
+
+    // ====== Keyboard ======
 
     protected override void OnKeyDown(KeyEventArgs e)
     {
@@ -1127,7 +918,6 @@ public class EditorForm : Form
         else if (e.Control && e.KeyCode == Keys.Y) { Redo(); e.Handled = true; }
         else if (e.Control && e.KeyCode == Keys.C) { CopyToClipboard(); e.Handled = true; }
         else if (e.Control && e.KeyCode == Keys.S) { SaveDialog(); e.Handled = true; }
-        else if (e.Control && e.KeyCode == Keys.U) { _ = UploadFromEditor(); e.Handled = true; }
         else if (e.KeyCode == Keys.Escape)
         {
             if (_cropping) CancelCrop();
@@ -1140,15 +930,12 @@ public class EditorForm : Form
         {
             switch (e.KeyCode)
             {
-                case Keys.N: _tool = Tool.Number; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.A: _tool = Tool.Arrow; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.R: _tool = Tool.Rectangle; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.T: _tool = Tool.Text; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.B: _tool = Tool.Blur; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.C: _tool = Tool.Crop; UpdateToolSelection(); e.Handled = true; break;
-                case Keys.Oemplus: case Keys.Add: SetZoom(_zoomLevel + 0.25f); e.Handled = true; break;
-                case Keys.OemMinus: case Keys.Subtract: SetZoom(_zoomLevel - 0.25f); e.Handled = true; break;
-                case Keys.D0: SetZoom(1f); e.Handled = true; break;
+                case Keys.N: _tool = Tool.Number; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.A: _tool = Tool.Arrow; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.R: _tool = Tool.Rectangle; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.T: _tool = Tool.Text; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.B: _tool = Tool.Blur; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.C: _tool = Tool.Crop; HighlightActiveTool(); e.Handled = true; break;
             }
         }
         base.OnKeyDown(e);
@@ -1188,14 +975,10 @@ public class DarkToolStripRenderer : ToolStripProfessionalRenderer
     protected override void OnRenderButtonBackground(ToolStripItemRenderEventArgs e)
     {
         if (e.Item is ToolStripButton btn && btn.Checked)
-        {
-            using var brush = new SolidBrush(Color.FromArgb(37, 99, 235));
-            e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
-        }
+            using (var brush = new SolidBrush(Color.FromArgb(37, 99, 235)))
+                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
         else if (e.Item.Selected)
-        {
-            using var brush = new SolidBrush(Color.FromArgb(40, 40, 60));
-            e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
-        }
+            using (var brush = new SolidBrush(Color.FromArgb(40, 40, 60)))
+                e.Graphics.FillRectangle(brush, e.Item.ContentRectangle);
     }
 }
