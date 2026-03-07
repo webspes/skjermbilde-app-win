@@ -26,12 +26,18 @@ jobs:
         shell: pwsh
         run: Compress-Archive -Path "publish/*" -DestinationPath "Skjermbilde-Windows-x64.zip"
 
+      - name: Build NSIS installer
+        uses: joncloud/makensis-action@v4
+        with:
+          script-file: installer.nsi
+
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: Skjermbilde-Windows-x64
           path: |
             publish/Skjermbilde.exe
+            Skjermbilde-Setup.exe
             Skjermbilde-Windows-x64.zip
 
       - name: Create GitHub Release
@@ -40,5 +46,6 @@ jobs:
         with:
           files: |
             publish/Skjermbilde.exe
+            Skjermbilde-Setup.exe
             Skjermbilde-Windows-x64.zip
           generate_release_notes: true
