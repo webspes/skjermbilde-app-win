@@ -99,21 +99,21 @@ public class EditorForm : Form
             WrapContents = false
         };
 
-        // Tool buttons
-        AddTool(toolbar, "Num", Tool.Number);
-        AddTool(toolbar, "Pil", Tool.Arrow);
-        AddTool(toolbar, "Rekt", Tool.Rectangle);
-        AddTool(toolbar, "Tekst", Tool.Text);
-        AddTool(toolbar, "Blur", Tool.Blur);
-        AddTool(toolbar, "Crop", Tool.Crop);
-        AddTool(toolbar, "Penn", Tool.Pen);
-        AddTool(toolbar, "Ellipse", Tool.Ellipse);
+        // Tool buttons with drawn icons
+        AddTool(toolbar, Tool.Number, "Nummer (N)", DrawNumberIcon);
+        AddTool(toolbar, Tool.Arrow, "Pil (A)", DrawArrowIcon);
+        AddTool(toolbar, Tool.Rectangle, "Rektangel (R)", DrawRectIcon);
+        AddTool(toolbar, Tool.Text, "Tekst (T)", DrawTextIcon);
+        AddTool(toolbar, Tool.Blur, "Blur (B)", DrawBlurIcon);
+        AddTool(toolbar, Tool.Crop, "Beskj\u00e6r (C)", DrawCropIcon);
+        AddTool(toolbar, Tool.Pen, "Penn (P)", DrawPenIcon);
+        AddTool(toolbar, Tool.Ellipse, "Ellipse (E)", DrawEllipseIcon);
 
         toolbar.Controls.Add(MakeSep());
 
-        AddAction(toolbar, "Angre", () => Undo());
-        AddAction(toolbar, "Gjenta", () => Redo());
-        AddAction(toolbar, "Slett", () => ClearAll());
+        AddActionIcon(toolbar, "Angre (Ctrl+Z)", DrawUndoIcon, () => Undo());
+        AddActionIcon(toolbar, "Gjenta (Ctrl+Y)", DrawRedoIcon, () => Redo());
+        AddActionIcon(toolbar, "Slett alt", DrawDeleteIcon, () => ClearAll());
 
         toolbar.Controls.Add(MakeSep());
 
@@ -356,38 +356,155 @@ public class EditorForm : Form
 
     // ====== UI helpers ======
 
-    private void AddTool(FlowLayoutPanel parent, string label, Tool tool)
+    private void AddTool(FlowLayoutPanel parent, Tool tool, string tooltip, Action<Graphics, Rectangle, Color> drawIcon)
     {
-        var btn = MakeBtn(label);
+        var btn = MakeIconBtn(tooltip, drawIcon);
         btn.Tag = tool;
         btn.Click += (_, _) => { _tool = tool; HighlightActiveTool(); };
         _toolButtons.Add(btn);
         parent.Controls.Add(btn);
     }
 
-    private void AddAction(FlowLayoutPanel parent, string label, Action action)
+    private void AddActionIcon(FlowLayoutPanel parent, string tooltip, Action<Graphics, Rectangle, Color> drawIcon, Action action)
     {
-        var btn = MakeBtn(label);
+        var btn = MakeIconBtn(tooltip, drawIcon);
         btn.Click += (_, _) => action();
         parent.Controls.Add(btn);
     }
 
-    private Button MakeBtn(string text)
+    private Button MakeIconBtn(string tooltip, Action<Graphics, Rectangle, Color> drawIcon)
     {
-        using var measureFont = new Font("Segoe UI", 9f);
-        var w = Math.Max(S(48), TextRenderer.MeasureText(text, measureFont).Width + S(16));
-        return new Button
+        var size = S(34);
+        var btn = new Button
         {
-            Text = text,
-            Size = new Size(w, S(34)),
+            Size = new Size(size, size),
             FlatStyle = FlatStyle.Flat,
             BackColor = Color.FromArgb(30, 30, 45),
             ForeColor = Color.FromArgb(210, 210, 230),
-            Font = new Font("Segoe UI", 9f),
             Cursor = Cursors.Hand,
             Margin = new Padding(S(1)),
             FlatAppearance = { BorderColor = Color.FromArgb(45, 45, 60) }
         };
+        var tt = new ToolTip();
+        tt.SetToolTip(btn, tooltip);
+        btn.Paint += (_, pe) =>
+        {
+            var active = btn.Tag is Tool t && t == _tool;
+            var fg = active ? Color.White : Color.FromArgb(200, 200, 220);
+            var iconRect = new Rectangle(size / 2 - S(9), size / 2 - S(9), S(18), S(18));
+            drawIcon(pe.Graphics, iconRect, fg);
+        };
+        return btn;
+    }
+
+    // ====== Toolbar icon painters ======
+
+    private static void DrawNumberIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 1.5f);
+        g.DrawEllipse(pen, r);
+        using var font = new Font("Segoe UI", r.Height * 0.45f, FontStyle.Bold);
+        using var brush = new SolidBrush(c);
+        var ts = g.MeasureString("1", font);
+        g.DrawString("1", font, brush, r.X + (r.Width - ts.Width) / 2, r.Y + (r.Height - ts.Height) / 2);
+    }
+
+    private static void DrawArrowIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 2f) { CustomEndCap = new AdjustableArrowCap(4, 4) };
+        g.DrawLine(pen, r.Left + 2, r.Bottom - 2, r.Right - 2, r.Top + 2);
+    }
+
+    private static void DrawRectIcon(Graphics g, Rectangle r, Color c)
+    {
+        using var pen = new Pen(c, 1.5f);
+        g.DrawRectangle(pen, r.X + 2, r.Y + 2, r.Width - 4, r.Height - 4);
+    }
+
+    private static void DrawTextIcon(Graphics g, Rectangle r, Color c)
+    {
+        using var font = new Font("Segoe UI", r.Height * 0.6f, FontStyle.Bold);
+        using var brush = new SolidBrush(c);
+        var ts = g.MeasureString("T", font);
+        g.DrawString("T", font, brush, r.X + (r.Width - ts.Width) / 2, r.Y + (r.Height - ts.Height) / 2);
+    }
+
+    private static void DrawBlurIcon(Graphics g, Rectangle r, Color c)
+    {
+        using var pen = new Pen(Color.FromArgb(120, c), 1f);
+        for (int i = 0; i < 3; i++)
+            for (int j = 0; j < 3; j++)
+            {
+                int x = r.X + 2 + i * (r.Width - 4) / 3;
+                int y = r.Y + 2 + j * (r.Height - 4) / 3;
+                int sz = (r.Width - 4) / 3 - 1;
+                g.FillRectangle(new SolidBrush(Color.FromArgb(60 + j * 30, c)), x, y, sz, sz);
+            }
+    }
+
+    private static void DrawCropIcon(Graphics g, Rectangle r, Color c)
+    {
+        using var pen = new Pen(c, 2f);
+        int m = 3;
+        // Two L-shaped crop marks
+        g.DrawLine(pen, r.X + m, r.Bottom - m, r.X + m, r.Y + m + 4);
+        g.DrawLine(pen, r.X + m, r.Bottom - m, r.Right - m - 4, r.Bottom - m);
+        g.DrawLine(pen, r.Right - m, r.Y + m, r.Right - m, r.Bottom - m - 4);
+        g.DrawLine(pen, r.Right - m, r.Y + m, r.X + m + 4, r.Y + m);
+    }
+
+    private static void DrawPenIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 2f) { StartCap = LineCap.Round, EndCap = LineCap.Round };
+        var pts = new[] {
+            new Point(r.X + 2, r.Bottom - 4),
+            new Point(r.X + r.Width / 3, r.Y + r.Height / 3),
+            new Point(r.X + r.Width * 2 / 3, r.Bottom - r.Height / 3),
+            new Point(r.Right - 2, r.Y + 4)
+        };
+        g.DrawCurve(pen, pts, 0.5f);
+    }
+
+    private static void DrawEllipseIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 1.5f);
+        g.DrawEllipse(pen, r.X + 1, r.Y + 3, r.Width - 2, r.Height - 6);
+    }
+
+    private static void DrawUndoIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 1.8f);
+        var arc = new Rectangle(r.X + 3, r.Y + 3, r.Width - 4, r.Height - 4);
+        g.DrawArc(pen, arc, 180, 230);
+        // Arrow head
+        int ax = r.X + 4, ay = r.Y + r.Height / 2;
+        g.DrawLine(pen, ax, ay, ax + 4, ay - 4);
+        g.DrawLine(pen, ax, ay, ax + 4, ay + 3);
+    }
+
+    private static void DrawRedoIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(c, 1.8f);
+        var arc = new Rectangle(r.X + 1, r.Y + 3, r.Width - 4, r.Height - 4);
+        g.DrawArc(pen, arc, 0, -230);
+        int ax = r.Right - 4, ay = r.Y + r.Height / 2;
+        g.DrawLine(pen, ax, ay, ax - 4, ay - 4);
+        g.DrawLine(pen, ax, ay, ax - 4, ay + 3);
+    }
+
+    private static void DrawDeleteIcon(Graphics g, Rectangle r, Color c)
+    {
+        g.SmoothingMode = SmoothingMode.AntiAlias;
+        using var pen = new Pen(Color.FromArgb(220, 70, 70), 2f);
+        int m = 4;
+        g.DrawLine(pen, r.X + m, r.Y + m, r.Right - m, r.Bottom - m);
+        g.DrawLine(pen, r.Right - m, r.Y + m, r.X + m, r.Bottom - m);
     }
 
     private Panel MakeSep() => new()
@@ -429,7 +546,7 @@ public class EditorForm : Form
         {
             var active = b.Tag is Tool t && t == _tool;
             b.BackColor = active ? Color.FromArgb(37, 99, 235) : Color.FromArgb(30, 30, 45);
-            b.ForeColor = active ? Color.White : Color.FromArgb(210, 210, 230);
+            b.Invalidate();
         }
         _numberSection.Visible = _tool == Tool.Number;
         _textSizePanel.Visible = _tool == Tool.Text;
@@ -946,6 +1063,8 @@ public class EditorForm : Form
                 case Keys.T: _tool = Tool.Text; HighlightActiveTool(); e.Handled = true; break;
                 case Keys.B: _tool = Tool.Blur; HighlightActiveTool(); e.Handled = true; break;
                 case Keys.C: _tool = Tool.Crop; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.P: _tool = Tool.Pen; HighlightActiveTool(); e.Handled = true; break;
+                case Keys.E: _tool = Tool.Ellipse; HighlightActiveTool(); e.Handled = true; break;
             }
         }
         base.OnKeyDown(e);
