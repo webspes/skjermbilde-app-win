@@ -1,0 +1,28 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <ApplicationIcon>assets\icon.ico</ApplicationIcon>
+    <AssemblyName>Skjermbilde</AssemblyName>
+    <RootNamespace>Skjermbilde</RootNamespace>
+    <Version>1.4.0</Version>
+    <Company>Skjermbilde.no</Company>
+    <Product>Skjermbilde</Product>
+    <Description>Skjermbilde.no – Windows-klient</Description>
+    <PublishSingleFile>true</PublishSingleFile>
+    <SelfContained>true</SelfContained>
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <IncludeNativeLibrariesForSelfExtract>true</IncludeNativeLibrariesForSelfExtract>
+  </PropertyGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="assets\icon.ico" />
+    <EmbeddedResource Include="assets\icon_16.png" />
+    <EmbeddedResource Include="assets\icon_32.png" />
+    <EmbeddedResource Include="assets\icon_48.png" />
+    <Content Include="assets\icon.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="System.Text.Json" Version="8.0.5" />
+  </ItemGroup>
+</Project>
