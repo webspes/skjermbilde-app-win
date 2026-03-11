@@ -6,7 +6,7 @@
     <ApplicationIcon>assets\icon.ico</ApplicationIcon>
     <AssemblyName>Skjermbilde</AssemblyName>
     <RootNamespace>Skjermbilde</RootNamespace>
-    <Version>1.5.0</Version>
+    <Version>1.6.0</Version>
     <Company>Skjermbilde.no</Company>
     <Product>Skjermbilde</Product>
     <Description>Skjermbilde.no – Windows-klient</Description>
