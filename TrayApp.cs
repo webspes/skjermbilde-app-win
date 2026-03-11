@@ -261,7 +261,7 @@ public class TrayApp : ApplicationContext
         var result = await ApiClient.UploadScreenshot(_settings, pngData, filename);
         if (result.Success)
         {
-            _pendingBalloonUrl = _settings.ServerUrl + "/dashboard";
+            _pendingBalloonUrl = _settings.PublicBaseUrl + "/dashboard";
             _trayIcon.ShowBalloonTip(2000, "Lastet opp!", "Klikk for \u00e5 \u00e5pne galleriet.", ToolTipIcon.Info);
         }
         else
@@ -322,7 +322,7 @@ public class TrayApp : ApplicationContext
     {
         System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
         {
-            FileName = _settings.ServerUrl + "/dashboard",
+            FileName = _settings.PublicBaseUrl + "/dashboard",
             UseShellExecute = true
         });
     }
@@ -333,9 +333,12 @@ public class TrayApp : ApplicationContext
 
         // Get naming format from server
         var me = await ApiClient.GetMe(_settings);
-        if (me?.NamingFormat != null)
+        if (me != null)
         {
-            _settings.NamingFormat = me.NamingFormat;
+            if (me.NamingFormat != null)
+                _settings.NamingFormat = me.NamingFormat;
+            if (!string.IsNullOrEmpty(me.InstanceUrl))
+                _settings.InstanceUrl = me.InstanceUrl;
             _settings.Save();
         }
 

@@ -16,7 +16,10 @@ public class AppSettings
     public string LocalDir { get; set; } = @"C:\Skjermbilder";
     public bool LaunchAtStartup { get; set; } = false;
     public string NamingFormat { get; set; } = "{year}-{number}";
+    public string InstanceUrl { get; set; } = "";
     public int NextLocalNumber { get; set; } = 1;
+
+    public string PublicBaseUrl => !string.IsNullOrEmpty(InstanceUrl) ? InstanceUrl : ServerUrl;
 
     private static readonly string SettingsDir = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),

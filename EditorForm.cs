@@ -989,7 +989,7 @@ public class EditorForm : Form
         if (result.Success && result.ScreenshotId != null)
         {
             var url = await ApiClient.CreateShareLink(_settings, result.ScreenshotId);
-            if (url != null) { Clipboard.SetText(url); Toast("Lenke kopiert!"); return; }
+            if (url != null) { Clipboard.SetText(url); Toast("Lenke kopiert! Klikk for \u00e5 \u00e5pne.", openUrl: url); return; }
         }
         Toast(result.Error ?? "Feil ved opplasting", true);
     }
@@ -1008,7 +1008,7 @@ public class EditorForm : Form
             Toast("Lastet opp!");
             System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
             {
-                FileName = _settings.ServerUrl + "/dashboard",
+                FileName = _settings.PublicBaseUrl + "/dashboard",
                 UseShellExecute = true
             });
         }
@@ -1029,22 +1029,32 @@ public class EditorForm : Form
         catch { }
     }
 
-    private void Toast(string msg, bool error = false)
+    private void Toast(string msg, bool error = false, string? openUrl = null)
     {
         var toast = new Panel { Size = new Size(S(260), S(38)), BackColor = Color.FromArgb(235, 22, 22, 34) };
+        if (openUrl != null) toast.Cursor = Cursors.Hand;
         toast.Location = new Point((_pictureBox.Width - toast.Width) / 2, _pictureBox.Height - S(55));
         toast.Paint += (_, pe) =>
         {
             using var p = new Pen(error ? Color.FromArgb(240, 86, 86) : Color.FromArgb(34, 197, 94));
             pe.Graphics.DrawRectangle(p, 0, 0, toast.Width - 1, toast.Height - 1);
         };
-        toast.Controls.Add(new Label
+        var label = new Label
         {
             Text = msg, AutoSize = true, ForeColor = Color.White,
             Font = new Font("Segoe UI", 9.5f), Location = new Point(S(10), S(8))
-        });
+        };
+        if (openUrl != null)
+        {
+            label.Cursor = Cursors.Hand;
+            void openLink(object? s, EventArgs e) => System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo { FileName = openUrl, UseShellExecute = true });
+            toast.Click += openLink;
+            label.Click += openLink;
+        }
+        toast.Controls.Add(label);
         _pictureBox.Controls.Add(toast);
-        var timer = new Timer { Interval = 3000 };
+        var timer = new Timer { Interval = 4000 };
         timer.Tick += (_, _) => { _pictureBox.Controls.Remove(toast); toast.Dispose(); timer.Dispose(); };
         timer.Start();
     }

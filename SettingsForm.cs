@@ -8,17 +8,21 @@ public class SettingsForm : Form
 {
     private readonly AppSettings _settings;
     private readonly float _dpiScale;
-    private TextBox _serverUrlBox = null!;
     private TextBox _apiKeyBox = null!;
+    private TextBox _serverUrlBox = null!;
     private TextBox _localDirBox = null!;
     private CheckBox _autoUploadCheck = null!;
     private CheckBox _startupCheck = null!;
     private CheckBox _saveLocalCheck = null!;
     private Label _statusLabel = null!;
+    private Label _instanceLabel = null!;
+    private Panel _mainPanel = null!;
+    private bool _isSetupMode;
 
     public SettingsForm(AppSettings settings)
     {
         _settings = settings;
+        _isSetupMode = string.IsNullOrEmpty(settings.ApiKey);
 
         using var g = CreateGraphics();
         _dpiScale = g.DpiX / 96f;
@@ -30,8 +34,8 @@ public class SettingsForm : Form
 
     private void InitializeComponents()
     {
-        Text = "Skjermbilde.no – Innstillinger";
-        ClientSize = new Size(S(480), S(620));
+        Text = _isSetupMode ? "Skjermbilde.no – Oppsett" : "Skjermbilde.no – Innstillinger";
+        ClientSize = _isSetupMode ? new Size(S(420), S(340)) : new Size(S(480), S(620));
         FormBorderStyle = FormBorderStyle.FixedDialog;
         MaximizeBox = false;
         MinimizeBox = false;
@@ -52,28 +56,80 @@ public class SettingsForm : Form
         }
         catch { }
 
-        // Main panel with padding
-        var main = new Panel
+        _mainPanel = new Panel
         {
             Dock = DockStyle.Fill,
             Padding = new Padding(S(28), S(24), S(28), S(16)),
             AutoScroll = true,
             BackColor = BackColor
         };
-        Controls.Add(main);
+        Controls.Add(_mainPanel);
 
-        // Content using a TableLayoutPanel for consistent spacing
-        var layout = new TableLayoutPanel
+        if (_isSetupMode)
+            BuildSetupView();
+        else
+            BuildFullSettingsView();
+    }
+
+    private void BuildSetupView()
+    {
+        _mainPanel.Controls.Clear();
+
+        var layout = MakeLayout();
+        _mainPanel.Controls.Add(layout);
+
+        int row = 0;
+
+        var header = MakeLabel("Koble til Skjermbilde.no", 15f, FontStyle.Bold, Color.FromArgb(240, 240, 255));
+        header.Margin = new Padding(0, 0, 0, S(8));
+        layout.Controls.Add(header, 0, row++);
+
+        var desc = MakeLabel("Lim inn API-nokkel fra din Skjermbilde.no-konto for a koble til.", 9.5f, FontStyle.Regular, Color.FromArgb(152, 152, 184));
+        desc.Margin = new Padding(0, 0, 0, S(20));
+        desc.MaximumSize = new Size(S(380), 0);
+        layout.Controls.Add(desc, 0, row++);
+
+        layout.Controls.Add(MakeFieldLabel("API-nokkel"), 0, row++);
+        _apiKeyBox = MakeTextBox(_settings.ApiKey, true);
+        layout.Controls.Add(_apiKeyBox, 0, row++);
+
+        _statusLabel = new Label
         {
-            Dock = DockStyle.Fill,
             AutoSize = true,
-            ColumnCount = 1,
-            Padding = new Padding(0),
-            Margin = new Padding(0),
-            BackColor = Color.Transparent
+            Margin = new Padding(0, S(4), 0, S(4)),
+            ForeColor = Color.FromArgb(152, 152, 184),
+            Font = new Font("Segoe UI", 9f)
         };
-        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        main.Controls.Add(layout);
+        layout.Controls.Add(_statusLabel, 0, row++);
+
+        _instanceLabel = new Label
+        {
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, S(12)),
+            ForeColor = Color.FromArgb(90, 90, 122),
+            Font = new Font("Segoe UI", 9f),
+            Visible = false
+        };
+        layout.Controls.Add(_instanceLabel, 0, row++);
+
+        var connectBtn = MakeButton("Koble til", Color.FromArgb(37, 99, 235), Color.White, S(160));
+        connectBtn.FlatAppearance.BorderSize = 0;
+        connectBtn.Click += async (_, _) => await SetupConnect();
+        layout.Controls.Add(connectBtn, 0, row++);
+
+        // Version
+        var version = System.Reflection.Assembly.GetExecutingAssembly().GetName().Version;
+        var verLabel = MakeLabel($"Skjermbilde.no v{version?.Major}.{version?.Minor}.{version?.Build}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
+        verLabel.Margin = new Padding(0, S(20), 0, 0);
+        layout.Controls.Add(verLabel, 0, row++);
+    }
+
+    private void BuildFullSettingsView()
+    {
+        _mainPanel.Controls.Clear();
+
+        var layout = MakeLayout();
+        _mainPanel.Controls.Add(layout);
 
         int row = 0;
 
@@ -85,13 +141,33 @@ public class SettingsForm : Form
         // --- Server section ---
         layout.Controls.Add(MakeSectionLabel("Servertilkobling"), 0, row++);
 
-        layout.Controls.Add(MakeFieldLabel("Server-URL"), 0, row++);
-        _serverUrlBox = MakeTextBox(_settings.ServerUrl);
-        layout.Controls.Add(_serverUrlBox, 0, row++);
-
-        layout.Controls.Add(MakeFieldLabel("API-nøkkel"), 0, row++);
+        layout.Controls.Add(MakeFieldLabel("API-nokkel"), 0, row++);
         _apiKeyBox = MakeTextBox(_settings.ApiKey, true);
         layout.Controls.Add(_apiKeyBox, 0, row++);
+
+        // Instance info
+        _instanceLabel = new Label
+        {
+            AutoSize = true,
+            Margin = new Padding(0, 0, 0, S(4)),
+            ForeColor = Color.FromArgb(34, 211, 165),
+            Font = new Font("Segoe UI", 9f),
+            Text = !string.IsNullOrEmpty(_settings.InstanceUrl)
+                ? $"Tilkoblet: {_settings.InstanceUrl}"
+                : $"Tilkoblet: {_settings.ServerUrl}"
+        };
+        layout.Controls.Add(_instanceLabel, 0, row++);
+
+        // Server URL (advanced, collapsed by default)
+        var advLabel = MakeFieldLabel("Server-URL (avansert)");
+        advLabel.Cursor = Cursors.Hand;
+        advLabel.ForeColor = Color.FromArgb(90, 90, 122);
+        layout.Controls.Add(advLabel, 0, row++);
+
+        _serverUrlBox = MakeTextBox(_settings.ServerUrl);
+        _serverUrlBox.Visible = false;
+        layout.Controls.Add(_serverUrlBox, 0, row++);
+        advLabel.Click += (_, _) => _serverUrlBox.Visible = !_serverUrlBox.Visible;
 
         // Test button + status
         var testRow = new FlowLayoutPanel
@@ -166,6 +242,79 @@ public class SettingsForm : Form
         var verLabel = MakeLabel($"Skjermbilde.no v{version?.Major}.{version?.Minor}.{version?.Build}", 8.5f, FontStyle.Regular, Color.FromArgb(90, 90, 122));
         verLabel.Margin = new Padding(0, S(4), 0, 0);
         layout.Controls.Add(verLabel, 0, row++);
+    }
+
+    private async System.Threading.Tasks.Task SetupConnect()
+    {
+        var key = _apiKeyBox.Text.Trim();
+        if (string.IsNullOrEmpty(key))
+        {
+            _statusLabel.Text = "Skriv inn en API-nokkel";
+            _statusLabel.ForeColor = Color.FromArgb(240, 86, 86);
+            return;
+        }
+
+        _statusLabel.Text = "Kobler til...";
+        _statusLabel.ForeColor = Color.FromArgb(152, 152, 184);
+        _instanceLabel.Visible = false;
+
+        var tempSettings = new AppSettings { ApiKey = key };
+        var me = await ApiClient.GetMe(tempSettings);
+
+        if (me != null)
+        {
+            _settings.ApiKey = key;
+            _settings.ServerUrl = tempSettings.ServerUrl;
+
+            if (!string.IsNullOrEmpty(me.NamingFormat))
+                _settings.NamingFormat = me.NamingFormat;
+            if (!string.IsNullOrEmpty(me.InstanceUrl))
+                _settings.InstanceUrl = me.InstanceUrl;
+
+            _settings.Save();
+
+            _statusLabel.Text = $"Tilkoblet som {me.Username} ({me.ScreenshotCount} bilder)";
+            _statusLabel.ForeColor = Color.FromArgb(34, 211, 165);
+
+            var displayUrl = !string.IsNullOrEmpty(me.InstanceUrl) ? me.InstanceUrl : _settings.ServerUrl;
+            _instanceLabel.Text = displayUrl;
+            _instanceLabel.ForeColor = Color.FromArgb(90, 90, 122);
+            _instanceLabel.Visible = true;
+
+            // Switch to full settings after a brief delay
+            var timer = new Timer { Interval = 1500 };
+            timer.Tick += (_, _) =>
+            {
+                timer.Stop();
+                timer.Dispose();
+                _isSetupMode = false;
+                Text = "Skjermbilde.no – Innstillinger";
+                ClientSize = new Size(S(480), S(620));
+                CenterToScreen();
+                BuildFullSettingsView();
+            };
+            timer.Start();
+        }
+        else
+        {
+            _statusLabel.Text = "Kunne ikke koble til. Sjekk API-nokkelen.";
+            _statusLabel.ForeColor = Color.FromArgb(240, 86, 86);
+        }
+    }
+
+    private TableLayoutPanel MakeLayout()
+    {
+        var layout = new TableLayoutPanel
+        {
+            Dock = DockStyle.Fill,
+            AutoSize = true,
+            ColumnCount = 1,
+            Padding = new Padding(0),
+            Margin = new Padding(0),
+            BackColor = Color.Transparent
+        };
+        layout.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
+        return layout;
     }
 
     private static Label MakeLabel(string text, float size, FontStyle style, Color color)
@@ -257,29 +406,35 @@ public class SettingsForm : Form
 
         var tempSettings = new AppSettings
         {
-            ServerUrl = _serverUrlBox.Text.TrimEnd('/'),
+            ServerUrl = _serverUrlBox?.Visible == true ? _serverUrlBox.Text.TrimEnd('/') : _settings.ServerUrl,
             ApiKey = _apiKeyBox.Text.Trim()
         };
 
         var me = await ApiClient.GetMe(tempSettings);
         if (me != null)
         {
-            _statusLabel.Text = $"✓ {me.Username} ({me.ScreenshotCount} bilder)";
+            _statusLabel.Text = $"Tilkoblet som {me.Username} ({me.ScreenshotCount} bilder)";
             _statusLabel.ForeColor = Color.FromArgb(34, 211, 165);
 
             if (!string.IsNullOrEmpty(me.NamingFormat))
                 _settings.NamingFormat = me.NamingFormat;
+            if (!string.IsNullOrEmpty(me.InstanceUrl))
+                _settings.InstanceUrl = me.InstanceUrl;
+
+            var displayUrl = !string.IsNullOrEmpty(me.InstanceUrl) ? me.InstanceUrl : tempSettings.ServerUrl;
+            _instanceLabel.Text = $"Tilkoblet: {displayUrl}";
         }
         else
         {
-            _statusLabel.Text = "✗ Kunne ikke koble til";
+            _statusLabel.Text = "Kunne ikke koble til";
             _statusLabel.ForeColor = Color.FromArgb(240, 86, 86);
         }
     }
 
     private void SaveAndClose()
     {
-        _settings.ServerUrl = _serverUrlBox.Text.TrimEnd('/');
+        if (_serverUrlBox?.Visible == true)
+            _settings.ServerUrl = _serverUrlBox.Text.TrimEnd('/');
         _settings.ApiKey = _apiKeyBox.Text.Trim();
         _settings.AutoUpload = _autoUploadCheck.Checked;
         _settings.LaunchAtStartup = _startupCheck.Checked;

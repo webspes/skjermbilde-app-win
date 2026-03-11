@@ -61,7 +61,7 @@ public class ApiClient
             if (data.TryGetProperty("url", out var url))
                 return url.GetString();
             if (data.TryGetProperty("token", out var token))
-                return $"{settings.ServerUrl}/s/{token.GetString()}";
+                return $"{settings.PublicBaseUrl}/s/{token.GetString()}";
             return null;
         }
         catch { return null; }
@@ -90,6 +90,9 @@ public class ApiClient
                 if (company.TryGetProperty("naming_format", out var nf) && nf.ValueKind == JsonValueKind.String)
                     result.NamingFormat = nf.GetString();
             }
+
+            if (data.TryGetProperty("instance_url", out var iu) && iu.ValueKind == JsonValueKind.String)
+                result.InstanceUrl = iu.GetString();
 
             return result;
         }
@@ -144,6 +147,7 @@ public class MeResult
     public string Username { get; set; } = "";
     public int ScreenshotCount { get; set; }
     public string? NamingFormat { get; set; }
+    public string? InstanceUrl { get; set; }
 }
 
 public class UpdateInfo
